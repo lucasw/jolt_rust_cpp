@@ -218,7 +218,7 @@ int64_t hello_world()
 
 	// Install trace and assert callbacks
 	Trace = TraceImpl;
-	JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+	// JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
 
 	// Create a factory, this class is responsible for creating instances of classes based on their name or hash and is mainly used for deserialization of saved data.
 	// It is not directly used in this example but still required.
@@ -229,6 +229,7 @@ int64_t hello_world()
 	// If you implement your own default material (PhysicsMaterial::sDefault) make sure to initialize it before this function or else this function will create one for you.
 	RegisterTypes();
 
+  /*
 	// We need a temp allocator for temporary allocations during the physics update. We're
 	// pre-allocating 10 MB to avoid having to do allocations during the physics update.
 	// B.t.w. 10 MB is way too much for this example but it is a typical value you can use.
@@ -365,7 +366,7 @@ int64_t hello_world()
 	// Destroy the factory
 	delete Factory::sInstance;
 	Factory::sInstance = nullptr;
-
+  */
   return 0;
 }
 
