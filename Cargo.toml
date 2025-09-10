@@ -1,0 +1,12 @@
+[package]
+name = "jolt_rust_cpp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cxx = "1.0.183"
+# TODO(lucasw) need to check out jolt-rust in parallel manually
+joltc-sys = {path = "../jolt-rust/crates/joltc-sys"}
+
+[build-dependencies]
+cxx-build = "1.0"
