@@ -1,16 +1,17 @@
 fn main() {
     cxx_build::bridge("src/main.rs")
-        .file("src/vehicle.cpp")
-        // TODO(lucasw) this depends on a source checkout of JoltPhysics adjacent to this project
-        // but there is one inside the current build dir (?), need to include that one instead
-        // .include("../JoltPhysics")
+        // .file("src/vehicle.cpp")
+        .file("src/HelloWorld.cpp")
         // this needs to be the same as what was built by the joltc in cargo
+        // could have a submodule here to make sure it's the same
+        // Or is it possible to get the path to the header files in target/release/joltc-sys/...?
         .include("../jolt-rust/crates/joltc-sys/JoltC/JoltPhysics")
         .std("c++20")
         .compile("vehicle_jolt");
 
-    println!("cargo:rerun-if-changed=src/vehicle.cpp");
-    println!("cargo:rerun-if-changed=src/vehicle.h");
+    // println!("cargo:rerun-if-changed=src/vehicle.cpp");
+    // println!("cargo:rerun-if-changed=src/vehicle.h");
+    println!("cargo:rerun-if-changed=src/HelloWorld.cpp");
 
     println!("cargo:rustc-link-lib=Jolt");
 

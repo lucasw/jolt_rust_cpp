@@ -1,14 +1,101 @@
+#include <cstdarg>
 #include <cstdint>
+#include <iostream>
+
+// #include <thread>
 
 #include <jolt_rust_cpp/src/vehicle.h>
 
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
-#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+/*
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/RegisterTypes.h>
+*/
+
+// Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
+JPH_SUPPRESS_WARNINGS
+
+// All Jolt symbols are in the JPH namespace
+using namespace JPH;
+
+// If you want your code to compile using single or double precision write 0.0_r to get a Real value that compiles to double or float depending if JPH_DOUBLE_PRECISION is set or not.
+using namespace JPH::literals;
+
+using namespace std;
+
+// Callback for traces, connect this to your own trace function if you have one
+static void TraceImpl(const char *inFMT, ...)
+{
+  // Format the message
+  va_list list;
+  va_start(list, inFMT);
+  char buffer[1024];
+  vsnprintf(buffer, sizeof(buffer), inFMT, list);
+  va_end(list);
+
+  // Print to the TTY
+  cout << buffer << endl;
+}
+
+// Callback for asserts, connect this to your own assert handler if you have one
+static bool AssertFailedImpl(const char *inExpression, const char *inMessage, const char *inFile, uint inLine)
+{
+  // Print to the TTY
+  cout << inFile << ":" << inLine << ": (" << inExpression << ") " << (inMessage != nullptr? inMessage : "") << endl;
+
+  // Breakpoint
+  return true;
+};
 
 namespace jolt_rust_cpp {
+
+  static constexpr uint cNumBodies = 10240;
+  static constexpr uint cNumBodyMutexes = 0; // Autodetect
+  static constexpr uint cMaxBodyPairs = 65536;
+  static constexpr uint cMaxContactConstraints = 20480;
+
   SimSystem::SimSystem() {
+#if 0
+    RegisterDefaultAllocator();
+
+    // Install trace and assert callbacks
+    Trace = TraceImpl;
+
+    JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+    // AssertFailed = AssertFailedImpl;
+
+    // Create a factory, this class is responsible for creating instances of classes based on their name or hash and is mainly used for deserialization of saved data.
+    // It is not directly used in this example but still required.
+    Factory::sInstance = new Factory();
+
+    // Register all physics types with the factory and install their collision handlers with the CollisionDispatch class.
+    // If you have your own custom shape types you probably need to register their handlers with the CollisionDispatch before calling this function.
+    // If you implement your own default material (PhysicsMaterial::sDefault) make sure to initialize it before this function or else this function will create one for you.
+    RegisterTypes();
+
+    // We need a temp allocator for temporary allocations during the physics update. We're
+    // pre-allocating 10 MB to avoid having to do allocations during the physics update.
+    // B.t.w. 10 MB is way too much for this example but it is a typical value you can use.
+    // If you don't want to pre-allocate you can also use TempAllocatorMalloc to fall back to
+    // malloc / free.
+    TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+
+    // We need a job system that will execute physics jobs on multiple threads. Typically
+    // you would implement the JobSystem interface yourself and let Jolt Physics run on top
+    // of your own job scheduler. JobSystemThreadPool is an example implementation.
+    JobSystemThreadPool job_system(cMaxPhysicsJobs, cMaxPhysicsBarriers, thread::hardware_concurrency() - 1);
+
+    // Create physics system
+    mPhysicsSystem = new PhysicsSystem();
+    mPhysicsSystem->Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, mBroadPhaseLayerInterface, mObjectVsBroadPhaseLayerFilter, mObjectVsObjectLayerFilter);
+
+#endif
+
 #if 0
     CreateFloor();
 
