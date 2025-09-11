@@ -24,13 +24,14 @@ namespace jolt_rust_cpp {
       void setValue(uint64_t value);
       uint64_t getValue() const;
 
-      // BPLayerInterfaceImpl  mBroadPhaseLayerInterface;  // The broadphase layer interface that maps object layers to broadphase layers
-      // ObjectVsBroadPhaseLayerFilterImpl mObjectVsBroadPhaseLayerFilter;  // Class that filters object vs broadphase layers
-      // ObjectLayerPairFilterImpl mObjectVsObjectLayerFilter;  // Class that filters object vs object layers
+      BPLayerInterfaceImpl  mBroadPhaseLayerInterface;  // The broadphase layer interface that maps object layers to broadphase layers
+      ObjectVsBroadPhaseLayerFilterImpl mObjectVsBroadPhaseLayerFilter;  // Class that filters object vs broadphase layers
+      ObjectLayerPairFilterImpl mObjectVsObjectLayerFilter;  // Class that filters object vs object layers
+
+      Body& CreateFloor(float inSize = 200.0f);
 
       PhysicsSystem * mPhysicsSystem = nullptr;
       BodyInterface * mBodyInterface = nullptr;
-      Body& CreateFloor(float inSize = 200.0f);
       JobSystem * mJobSystem = nullptr;
       // DebugRenderer * mDebugRenderer = nullptr;
       TempAllocator * mTempAllocator = nullptr;

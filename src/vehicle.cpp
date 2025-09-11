@@ -60,13 +60,13 @@ namespace jolt_rust_cpp {
   static constexpr uint cMaxContactConstraints = 20480;
 
   SimSystem::SimSystem() {
-#if 0
     RegisterDefaultAllocator();
 
     // Install trace and assert callbacks
     Trace = TraceImpl;
 
     JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+    // this fouls up - look at hello world example to debug
     // AssertFailed = AssertFailedImpl;
 
     // Create a factory, this class is responsible for creating instances of classes based on their name or hash and is mainly used for deserialization of saved data.
@@ -76,7 +76,7 @@ namespace jolt_rust_cpp {
     // Register all physics types with the factory and install their collision handlers with the CollisionDispatch class.
     // If you have your own custom shape types you probably need to register their handlers with the CollisionDispatch before calling this function.
     // If you implement your own default material (PhysicsMaterial::sDefault) make sure to initialize it before this function or else this function will create one for you.
-    RegisterTypes();
+    // RegisterTypes();
 
     // We need a temp allocator for temporary allocations during the physics update. We're
     // pre-allocating 10 MB to avoid having to do allocations during the physics update.
@@ -88,13 +88,12 @@ namespace jolt_rust_cpp {
     // We need a job system that will execute physics jobs on multiple threads. Typically
     // you would implement the JobSystem interface yourself and let Jolt Physics run on top
     // of your own job scheduler. JobSystemThreadPool is an example implementation.
-    JobSystemThreadPool job_system(cMaxPhysicsJobs, cMaxPhysicsBarriers, thread::hardware_concurrency() - 1);
+    // this also fouls up
+    // JobSystemThreadPool job_system(cMaxPhysicsJobs, cMaxPhysicsBarriers, thread::hardware_concurrency() - 1);
 
     // Create physics system
     mPhysicsSystem = new PhysicsSystem();
     mPhysicsSystem->Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, mBroadPhaseLayerInterface, mObjectVsBroadPhaseLayerFilter, mObjectVsObjectLayerFilter);
-
-#endif
 
 #if 0
     CreateFloor();
@@ -141,6 +140,7 @@ namespace jolt_rust_cpp {
 #endif
   }
 
+  // this fouls up
 #if 0
   SimSystem::CreateFloor(float inSize)
   {
