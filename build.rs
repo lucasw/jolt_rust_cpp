@@ -10,6 +10,8 @@ fn main() {
         // maybe it's because jolt-sys has different settings, try matching those
         // or need to recompile all of jolt, don't use jolt-sys at all
         // .include("target/release/build/joltc-sys-5fa7919ad5c36a20/out/include")
+        .define("JPH_DEBUG_RENDERER", Some("1"))
+        .define("JPH_PROFILE_ENABLED", Some("1"))
         .std("c++20")
         .compile("vehicle_jolt");
 
