@@ -210,7 +210,7 @@ public:
 namespace jolt_rust_cpp {
 
 // Program entry point
-int64_t hello_world()
+int64_t init()
 {
 	// Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
 	// This needs to be done before any other Jolt function is called.
@@ -218,7 +218,7 @@ int64_t hello_world()
 
 	// Install trace and assert callbacks
 	Trace = TraceImpl;
-	// JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+	JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
 
 	// Create a factory, this class is responsible for creating instances of classes based on their name or hash and is mainly used for deserialization of saved data.
 	// It is not directly used in this example but still required.
