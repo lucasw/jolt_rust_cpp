@@ -8,18 +8,18 @@ mod ffi {
         type SimSystem;
         fn new_sim_system(max_num_bodies: u32) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
+        // fn update(self: Pin<&mut SimSystem>);
+        // fn close(self: Pin<&mut SimSystem>);
     }
 }
 
 fn main() {
     println!("jolt_rust_cpp");
     let sim_system = ffi::new_sim_system(8000);
-    /*
     for i in 0..100 {
-        sim_system.step();
+        // sim_system.update();
     }
-    */
     // sim_system.init(8000);
-    // ffi::init(8000);
+    // sim_system.close();
     println!("done");
 }

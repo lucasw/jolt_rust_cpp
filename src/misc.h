@@ -25,6 +25,10 @@ namespace jolt_rust_cpp {
       /*
       // DebugRenderer * mDebugRenderer = nullptr;
       */
+
+      JPH::BodyID sphere_id;
+      JPH::BodyID floor_id;
+
       unsigned int step = 0;
 
       // We simulate the physics world in discrete time steps. 60 Hz is a good rate to update the physics system.

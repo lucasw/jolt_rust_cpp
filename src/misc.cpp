@@ -316,18 +316,18 @@ namespace jolt_rust_cpp {
     // Create the actual rigid body
     Body *floor = body_interface.CreateBody(floor_settings); // Note that if we run out of bodies this can return nullptr
 
+    floor_id = floor->GetID();
     // Add it to the world
-    body_interface.AddBody(floor->GetID(), EActivation::DontActivate);
+    body_interface.AddBody(floor_id, EActivation::DontActivate);
 
     // Now create a dynamic body to bounce on the floor
     // Note that this uses the shorthand version of creating and adding a body to the world
     BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(0.0_r, 2.0_r, 0.0_r), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
-    BodyID sphere_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
+    sphere_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
 
     // Now you can interact with the dynamic body, in this case we're going to give it a velocity.
     // (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
     body_interface.SetLinearVelocity(sphere_id, Vec3(0.0f, -5.0f, 0.0f));
-
 
     // Optional step: Before starting the physics simulation you can optimize the broad phase. This improves collision detection performance (it's pointless here because we only have 2 bodies).
     // You should definitely not call this every frame or when e.g. streaming in a new level section as it is an expensive operation.
@@ -335,16 +335,13 @@ namespace jolt_rust_cpp {
     physics_system->OptimizeBroadPhase();
 
     // Now we're ready to simulate the body, keep simulating until it goes to sleep
-    while (body_interface.IsActive(sphere_id))
-    {
-      // Output current position and velocity of the sphere
-      RVec3 position = body_interface.GetCenterOfMassPosition(sphere_id);
-      Vec3 velocity = body_interface.GetLinearVelocity(sphere_id);
-      cout << "Step " << step << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ() << "), Velocity = (" << velocity.GetX() << ", " << velocity.GetY() << ", " << velocity.GetZ() << ")" << endl;
+    // while (body_interface.IsActive(sphere_id))
 
-      update();
-    }
+    return 0;
+  }
 
+  void SimSystem::close() {
+    auto& body_interface = physics_system->GetBodyInterface();
     // Remove the sphere from the physics system. Note that the sphere itself keeps all of its state and can be re-added at any time.
     body_interface.RemoveBody(sphere_id);
 
@@ -352,15 +349,9 @@ namespace jolt_rust_cpp {
     body_interface.DestroyBody(sphere_id);
 
     // Remove and destroy the floor
-    body_interface.RemoveBody(floor->GetID());
-    body_interface.DestroyBody(floor->GetID());
+    body_interface.RemoveBody(floor_id);
+    body_interface.DestroyBody(floor_id);
 
-    close();
-
-    return 0;
-  }
-
-  void SimSystem::close() {
     // Unregisters all types with the factory and cleans up the default material
     UnregisterTypes();
 
@@ -370,11 +361,17 @@ namespace jolt_rust_cpp {
   }
 
   void SimSystem::update() {
-    // Next step
+    auto& body_interface = physics_system->GetBodyInterface();
+
+    // Output current position and velocity of the sphere
+    RVec3 position = body_interface.GetCenterOfMassPosition(sphere_id);
+    Vec3 velocity = body_interface.GetLinearVelocity(sphere_id);
+    cout << "Step " << step << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ() << "), Velocity = (" << velocity.GetX() << ", " << velocity.GetY() << ", " << velocity.GetZ() << ")" << endl;
+
+    //
     // If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
     const int cCollisionSteps = 1;
 
-    auto& body_interface = physics_system->GetBodyInterface();
     // Step the world
     physics_system->Update(cDeltaTime, cCollisionSteps, temp_allocator, job_system);
 
