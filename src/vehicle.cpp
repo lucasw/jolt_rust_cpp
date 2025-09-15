@@ -28,30 +28,6 @@ using namespace JPH::literals;
 
 using namespace std;
 
-// Callback for traces, connect this to your own trace function if you have one
-static void TraceImpl(const char *inFMT, ...)
-{
-  // Format the message
-  va_list list;
-  va_start(list, inFMT);
-  char buffer[1024];
-  vsnprintf(buffer, sizeof(buffer), inFMT, list);
-  va_end(list);
-
-  // Print to the TTY
-  cout << buffer << endl;
-}
-
-// Callback for asserts, connect this to your own assert handler if you have one
-static bool AssertFailedImpl(const char *inExpression, const char *inMessage, const char *inFile, uint inLine)
-{
-  // Print to the TTY
-  cout << inFile << ":" << inLine << ": (" << inExpression << ") " << (inMessage != nullptr? inMessage : "") << endl;
-
-  // Breakpoint
-  return true;
-};
-
 namespace jolt_rust_cpp {
 
   static constexpr uint cNumBodies = 10240;
