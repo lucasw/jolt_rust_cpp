@@ -159,9 +159,9 @@ public:
     std::cout << "A body got activated" << endl;
   }
 
-  virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, uint64 inBodyUserData) override
+  virtual void OnBodyDeactivated(const JPH::BodyID &body_id, uint64 inBodyUserData) override
   {
-    std::cout << "A body went to sleep" << endl;
+    std::cout << "A body went to sleep " << body_id.GetIndex() << " " << body_id.GetSequenceNumber()  << endl;
   }
 };
 
