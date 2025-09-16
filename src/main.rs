@@ -7,6 +7,20 @@ mod ffi {
         z: f32,
     }
 
+    #[derive(Clone)]
+    struct CQuat {
+        x: f32,
+        y: f32,
+        z: f32,
+        w: f32,
+    }
+
+    #[derive(Clone)]
+    struct CTf {
+        pos: CVec3,
+        quat: CQuat,
+    }
+
     unsafe extern "C++" {
         /*
         include!("jolt_rust_cpp/src/vehicle.h");
@@ -19,7 +33,7 @@ mod ffi {
             floor_pos: CVec3,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
-        fn update(self: Pin<&mut SimSystem>) -> CVec3;
+        fn update(self: Pin<&mut SimSystem>) -> CTf;
         fn close(self: Pin<&mut SimSystem>);
     }
 }
@@ -63,28 +77,34 @@ fn main() -> Result<(), anyhow::Error> {
 
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..300 {
+    for step in 0..1900 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
-        let car_pos = sim_system.as_mut().unwrap().update();
+        let car_tf = sim_system.as_mut().unwrap().update();
 
+        // TODO(lucasw) need to rotate the quat for rerun?
+        let rerun_quat = rerun::external::glam::Quat::from_xyzw(
+            car_tf.quat.x,
+            car_tf.quat.y,
+            car_tf.quat.z,
+            car_tf.quat.w,
+        ) * rerun::external::glam::Quat::from_euler(
+            rerun::external::glam::EulerRot::XYZ,
+            std::f32::consts::FRAC_PI_2,
+            0.0,
+            0.0, // std::f32::consts::FRAC_PI_2,
+        );
         rec.log(
             "world/car",
             &rerun::Boxes3D::from_centers_and_half_sizes(
-                [(car_pos.x, car_pos.y, car_pos.z)],
+                [(car_tf.pos.x, car_tf.pos.y, car_tf.pos.z)],
                 [(car_half_length, car_half_width, car_half_height)],
             )
             // .with_fill_mode(rerun::FillMode::Solid)
-            .with_quaternions([rerun::Quaternion::from_xyzw([
-                floor_quat.0,
-                floor_quat.1,
-                floor_quat.2,
-                floor_quat.3,
-            ])]),
+            .with_quaternions([rerun_quat]),
         )?;
     }
-    // sim_system.init(8000);
-    // sim_system.close();
+
     sim_system.as_mut().unwrap().close();
     println!("done");
 

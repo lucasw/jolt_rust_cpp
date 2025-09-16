@@ -105,6 +105,7 @@ private:
 
   namespace jolt_rust_cpp {
     struct CVec3;
+    struct CTf;
   }
 
 /// Class that determines if an object layer can collide with a broadphase layer
@@ -248,7 +249,7 @@ namespace jolt_rust_cpp {
         jolt_rust_cpp::CVec3 floor_pos);
       int64_t init(uint32_t max_num_bodies,
         jolt_rust_cpp::CVec3 floor_pos);
-      CVec3 update();
+      CTf update();
       void close();
 
       // Player input
