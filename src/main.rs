@@ -19,10 +19,8 @@ mod ffi {
             floor_pos: CVec3,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
-        fn update(self: Pin<&mut SimSystem>);
-        // fn update(&self);
+        fn update(self: Pin<&mut SimSystem>) -> CVec3;
         fn close(self: Pin<&mut SimSystem>);
-        // fn close(&self);
     }
 }
 
@@ -58,8 +56,32 @@ fn main() -> Result<(), anyhow::Error> {
         ])]),
     )?;
 
-    for _i in 0..300 {
-        sim_system.as_mut().unwrap().update();
+    // TODO(lucasw) share with SimSystem
+    let car_half_length = 2.0;
+    let car_half_width = 0.9;
+    let car_half_height = 0.2;
+
+    let delta_time = 1.0 / 60.0;
+
+    for step in 0..300 {
+        rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
+
+        let car_pos = sim_system.as_mut().unwrap().update();
+
+        rec.log(
+            "world/car",
+            &rerun::Boxes3D::from_centers_and_half_sizes(
+                [(car_pos.x, car_pos.y, car_pos.z)],
+                [(car_half_length, car_half_width, car_half_height)],
+            )
+            // .with_fill_mode(rerun::FillMode::Solid)
+            .with_quaternions([rerun::Quaternion::from_xyzw([
+                floor_quat.0,
+                floor_quat.1,
+                floor_quat.2,
+                floor_quat.3,
+            ])]),
+        )?;
     }
     // sim_system.init(8000);
     // sim_system.close();

@@ -369,7 +369,7 @@ namespace jolt_rust_cpp {
     Factory::sInstance = nullptr;
   }
 
-  void SimSystem::update() {
+  CVec3 SimSystem::update() {
     // cout << "update " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
 
@@ -392,6 +392,12 @@ namespace jolt_rust_cpp {
     physics_system->Update(cDeltaTime, cCollisionSteps, temp_allocator, job_system);
 
     ++step;
+
+    CVec3 car_pos;
+    car_pos.x = position.GetX();
+    car_pos.y = position.GetY();
+    car_pos.z = position.GetZ();
+    return car_pos;
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
