@@ -18,7 +18,7 @@ mod ffi {
 fn main() {
     println!("jolt_rust_cpp");
     let mut sim_system = ffi::new_sim_system(8000);
-    for _i in 0..100 {
+    for _i in 0..300 {
         sim_system.as_mut().unwrap().update();
     }
     // sim_system.init(8000);

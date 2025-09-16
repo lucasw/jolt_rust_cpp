@@ -14,6 +14,7 @@ using namespace std;
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
 
 // All Jolt symbols are in the JPH namespace
 using namespace JPH;
@@ -154,14 +155,14 @@ public:
 class MyBodyActivationListener : public JPH::BodyActivationListener
 {
 public:
-  virtual void OnBodyActivated(const JPH::BodyID &inBodyID, uint64 inBodyUserData) override
+  virtual void OnBodyActivated(const JPH::BodyID &body_id, uint64 inBodyUserData) override
   {
-    std::cout << "A body got activated" << endl;
+    cout << "A body got activated " << body_id.GetIndex() << " " << static_cast<uint32_t>(body_id.GetSequenceNumber()) << endl;
   }
 
   virtual void OnBodyDeactivated(const JPH::BodyID &body_id, uint64 inBodyUserData) override
   {
-    std::cout << "A body went to sleep " << body_id.GetIndex() << " " << body_id.GetSequenceNumber()  << endl;
+    cout << "A body went to sleep " << body_id.GetIndex() << " " << static_cast<uint32_t>(body_id.GetSequenceNumber()) << endl;
   }
 };
 
@@ -200,11 +201,56 @@ namespace jolt_rust_cpp {
       // We simulate the physics world in discrete time steps. 60 Hz is a good rate to update the physics system.
       const float cDeltaTime = 1.0f / 60.0f;
 
+      // The car
+      // TODO(lucasw) separate into another class
+      static inline float     sInitialRollAngle = 0;
+      static inline float     sMaxRollAngle = DegreesToRadians(60.0f);
+      static inline float     sMaxSteeringAngle = DegreesToRadians(30.0f);
+      static inline int       sCollisionMode = 2;
+      static inline bool      sFourWheelDrive = false;
+      static inline bool      sAntiRollbar = true;
+      static inline bool      sLimitedSlipDifferentials = true;
+      static inline bool      sOverrideGravity = false;         ///< If true, gravity is overridden to always oppose the ground normal
+      static inline float     sMaxEngineTorque = 500.0f;
+      static inline float     sClutchStrength = 10.0f;
+      static inline float     sFrontCasterAngle = 0.0f;
+      static inline float     sFrontKingPinAngle = 0.0f;
+      static inline float     sFrontCamber = 0.0f;
+      static inline float     sFrontToe = 0.0f;
+      static inline float     sFrontSuspensionForwardAngle = 0.0f;
+      static inline float     sFrontSuspensionSidewaysAngle = 0.0f;
+      static inline float     sFrontSuspensionMinLength = 0.3f;
+      static inline float     sFrontSuspensionMaxLength = 0.5f;
+      static inline float     sFrontSuspensionFrequency = 1.5f;
+      static inline float     sFrontSuspensionDamping = 0.5f;
+      static inline float     sRearSuspensionForwardAngle = 0.0f;
+      static inline float     sRearSuspensionSidewaysAngle = 0.0f;
+      static inline float     sRearCasterAngle = 0.0f;
+      static inline float     sRearKingPinAngle = 0.0f;
+      static inline float     sRearCamber = 0.0f;
+      static inline float     sRearToe = 0.0f;
+      static inline float     sRearSuspensionMinLength = 0.3f;
+      static inline float     sRearSuspensionMaxLength = 0.5f;
+      static inline float     sRearSuspensionFrequency = 1.5f;
+      static inline float     sRearSuspensionDamping = 0.5f;
+
+      // Body * mCarBody;  ///< The vehicle
+      JPH::BodyID car_id;
+      Ref<VehicleConstraint> mVehicleConstraint;  ///< The vehicle constraint
+      Ref<VehicleCollisionTester> mTesters[3];  ///< Collision testers for the wheel
+
     public:
       SimSystem(uint32_t max_num_bodies);
       int64_t init(uint32_t max_num_bodies);
       void update();
       void close();
+
+      // Player input
+      float mForward = 0.0f;
+      float mPreviousForward = 1.0f;  ///< Keeps track of last car direction so we know when to brake and when to accelerate
+      float mRight = 0.0f;
+      float mBrake = 0.0f;
+      float mHandBrake = 0.0f;
   };
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies);

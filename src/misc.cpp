@@ -13,12 +13,17 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
+
+#include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/SphereShape.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 
 // STL includes
 #include <iostream>
@@ -171,6 +176,164 @@ namespace jolt_rust_cpp {
     // (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
     body_interface.SetLinearVelocity(sphere_id, Vec3(0.0f, 0.0f, -1.0f));
 
+    // create the car
+    {
+      const float wheel_radius = 0.3f;
+      const float wheel_width = 0.1f;
+      const float half_vehicle_length = 2.0f;
+      const float half_vehicle_width = 0.9f;
+      const float half_vehicle_height = 0.2f;
+
+      // Create collision testers
+      mTesters[0] = new VehicleCollisionTesterRay(Layers::MOVING);
+      mTesters[1] = new VehicleCollisionTesterCastSphere(Layers::MOVING, 0.5f * wheel_width);
+      mTesters[2] = new VehicleCollisionTesterCastCylinder(Layers::MOVING);
+
+      // TODO(lucasw) rotate the car so z is vertical axis, here it spawns sideways
+      // Create vehicle body
+      RVec3 position(0, 2, 3);
+      RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(Vec3(0, -half_vehicle_height, 0), new BoxShape(Vec3(half_vehicle_width, half_vehicle_height, half_vehicle_length))).Create().Get();
+      BodyCreationSettings car_body_settings(car_shape, position, Quat::sRotation(Vec3::sAxisZ(), sInitialRollAngle), EMotionType::Dynamic, Layers::MOVING);
+      car_body_settings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
+      car_body_settings.mMassPropertiesOverride.mMass = 1500.0f;
+      auto mCarBody = body_interface.CreateBody(car_body_settings);
+
+      car_id = mCarBody->GetID();
+      body_interface.AddBody(car_id, EActivation::Activate);
+
+      // Create vehicle constraint
+      VehicleConstraintSettings vehicle;
+      vehicle.mDrawConstraintSize = 0.1f;
+      vehicle.mMaxPitchRollAngle = sMaxRollAngle;
+
+      // Suspension direction
+      Vec3 front_suspension_dir = Vec3(Tan(sFrontSuspensionSidewaysAngle), -1, Tan(sFrontSuspensionForwardAngle)).Normalized();
+      Vec3 front_steering_axis = Vec3(-Tan(sFrontKingPinAngle), 1, -Tan(sFrontCasterAngle)).Normalized();
+      Vec3 front_wheel_up = Vec3(Sin(sFrontCamber), Cos(sFrontCamber), 0);
+      Vec3 front_wheel_forward = Vec3(-Sin(sFrontToe), 0, Cos(sFrontToe));
+      Vec3 rear_suspension_dir = Vec3(Tan(sRearSuspensionSidewaysAngle), -1, Tan(sRearSuspensionForwardAngle)).Normalized();
+      Vec3 rear_steering_axis = Vec3(-Tan(sRearKingPinAngle), 1, -Tan(sRearCasterAngle)).Normalized();
+      Vec3 rear_wheel_up = Vec3(Sin(sRearCamber), Cos(sRearCamber), 0);
+      Vec3 rear_wheel_forward = Vec3(-Sin(sRearToe), 0, Cos(sRearToe));
+      Vec3 flip_x(-1, 1, 1);
+
+      // Wheels, left front
+      WheelSettingsWV *w1 = new WheelSettingsWV;
+      w1->mPosition = Vec3(
+          half_vehicle_width,
+          -0.9f * half_vehicle_height,
+          half_vehicle_length - 2.0f * wheel_radius);
+      w1->mSuspensionDirection = front_suspension_dir;
+      w1->mSteeringAxis = front_steering_axis;
+      w1->mWheelUp = front_wheel_up;
+      w1->mWheelForward = front_wheel_forward;
+      w1->mSuspensionMinLength = sFrontSuspensionMinLength;
+      w1->mSuspensionMaxLength = sFrontSuspensionMaxLength;
+      w1->mSuspensionSpring.mFrequency = sFrontSuspensionFrequency;
+      w1->mSuspensionSpring.mDamping = sFrontSuspensionDamping;
+      w1->mMaxSteerAngle = sMaxSteeringAngle;
+      w1->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
+
+      // Right front
+      WheelSettingsWV *w2 = new WheelSettingsWV;
+      w2->mPosition = Vec3(
+          -half_vehicle_width,
+          -0.9f * half_vehicle_height,
+          half_vehicle_length - 2.0f * wheel_radius);
+      w2->mSuspensionDirection = flip_x * front_suspension_dir;
+      w2->mSteeringAxis = flip_x * front_steering_axis;
+      w2->mWheelUp = flip_x * front_wheel_up;
+      w2->mWheelForward = flip_x * front_wheel_forward;
+      w2->mSuspensionMinLength = sFrontSuspensionMinLength;
+      w2->mSuspensionMaxLength = sFrontSuspensionMaxLength;
+      w2->mSuspensionSpring.mFrequency = sFrontSuspensionFrequency;
+      w2->mSuspensionSpring.mDamping = sFrontSuspensionDamping;
+      w2->mMaxSteerAngle = sMaxSteeringAngle;
+      w2->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
+
+      // Left rear
+      WheelSettingsWV *w3 = new WheelSettingsWV;
+      w3->mPosition = Vec3(
+          half_vehicle_width,
+          -0.9f * half_vehicle_height,
+          -half_vehicle_length + 2.0f * wheel_radius);
+      w3->mSuspensionDirection = rear_suspension_dir;
+      w3->mSteeringAxis = rear_steering_axis;
+      w3->mWheelUp = rear_wheel_up;
+      w3->mWheelForward = rear_wheel_forward;
+      w3->mSuspensionMinLength = sRearSuspensionMinLength;
+      w3->mSuspensionMaxLength = sRearSuspensionMaxLength;
+      w3->mSuspensionSpring.mFrequency = sRearSuspensionFrequency;
+      w3->mSuspensionSpring.mDamping = sRearSuspensionDamping;
+      w3->mMaxSteerAngle = 0.0f;
+
+      // Right rear
+      WheelSettingsWV *w4 = new WheelSettingsWV;
+      w4->mPosition = Vec3(
+          -half_vehicle_width,
+          -0.9f * half_vehicle_height,
+          -half_vehicle_length + 2.0f * wheel_radius);
+      w4->mSuspensionDirection = flip_x * rear_suspension_dir;
+      w4->mSteeringAxis = flip_x * rear_steering_axis;
+      w4->mWheelUp = flip_x * rear_wheel_up;
+      w4->mWheelForward = flip_x * rear_wheel_forward;
+      w4->mSuspensionMinLength = sRearSuspensionMinLength;
+      w4->mSuspensionMaxLength = sRearSuspensionMaxLength;
+      w4->mSuspensionSpring.mFrequency = sRearSuspensionFrequency;
+      w4->mSuspensionSpring.mDamping = sRearSuspensionDamping;
+      w4->mMaxSteerAngle = 0.0f;
+
+      vehicle.mWheels = { w1, w2, w3, w4 };
+
+      for (WheelSettings *w : vehicle.mWheels)
+      {
+        w->mRadius = wheel_radius;
+        w->mWidth = wheel_width;
+      }
+
+      WheeledVehicleControllerSettings *controller = new WheeledVehicleControllerSettings;
+      vehicle.mController = controller;
+
+      // Differential
+      controller->mDifferentials.resize(sFourWheelDrive? 2 : 1);
+      controller->mDifferentials[0].mLeftWheel = 0;
+      controller->mDifferentials[0].mRightWheel = 1;
+      if (sFourWheelDrive)
+      {
+        controller->mDifferentials[1].mLeftWheel = 2;
+        controller->mDifferentials[1].mRightWheel = 3;
+
+        // Split engine torque
+        controller->mDifferentials[0].mEngineTorqueRatio = controller->mDifferentials[1].mEngineTorqueRatio = 0.5f;
+      }
+
+      // Anti rollbars
+      if (sAntiRollbar)
+      {
+        vehicle.mAntiRollBars.resize(2);
+        vehicle.mAntiRollBars[0].mLeftWheel = 0;
+        vehicle.mAntiRollBars[0].mRightWheel = 1;
+        vehicle.mAntiRollBars[1].mLeftWheel = 2;
+        vehicle.mAntiRollBars[1].mRightWheel = 3;
+      }
+
+      mVehicleConstraint = new VehicleConstraint(*mCarBody, vehicle);
+
+      // The vehicle settings were tweaked with a buggy implementation of the longitudinal tire impulses, this meant that PhysicsSettings::mNumVelocitySteps times more impulse
+      // could be applied than intended. To keep the behavior of the vehicle the same we increase the max longitudinal impulse by the same factor. In a future version the vehicle
+      // will be retweaked.
+      static_cast<WheeledVehicleController *>(mVehicleConstraint->GetController())->SetTireMaxImpulseCallback(
+          [](uint, float &outLongitudinalImpulse, float &outLateralImpulse, float inSuspensionImpulse, float inLongitudinalFriction, float inLateralFriction, float, float, float)
+          {
+          outLongitudinalImpulse = 10.0f * inLongitudinalFriction * inSuspensionImpulse;
+          outLateralImpulse = inLateralFriction * inSuspensionImpulse;
+          });
+
+      physics_system->AddConstraint(mVehicleConstraint);
+      // physics_system->AddStepListener(mVehicleConstraint);
+    }
+
+
     // Optional step: Before starting the physics simulation you can optimize the broad phase. This improves collision detection performance (it's pointless here because we only have 2 bodies).
     // You should definitely not call this every frame or when e.g. streaming in a new level section as it is an expensive operation.
     // Instead insert all new objects in batches instead of 1 at a time to keep the broad phase efficient.
@@ -208,9 +371,15 @@ namespace jolt_rust_cpp {
     auto& body_interface = physics_system->GetBodyInterface();
 
     // Output current position and velocity of the sphere
-    RVec3 position = body_interface.GetCenterOfMassPosition(sphere_id);
-    Vec3 velocity = body_interface.GetLinearVelocity(sphere_id);
-    cout << "Step " << step << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ() << "), Velocity = (" << velocity.GetX() << ", " << velocity.GetY() << ", " << velocity.GetZ() << ")" << endl;
+    RVec3 position = body_interface.GetCenterOfMassPosition(car_id);
+    Vec3 linear_vel;
+    Vec3 angular_vel;
+    body_interface.GetLinearAndAngularVelocity(car_id, linear_vel, angular_vel);
+    cout << "Step " << step
+      << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ()
+      << "), Linear Velocity = (" << linear_vel.GetX() << ", " << linear_vel.GetY() << ", " << linear_vel.GetZ() << ")"
+      << "), Angular Velocity = (" << angular_vel.GetX() << ", " << angular_vel.GetY() << ", " << angular_vel.GetZ() << ")"
+      << endl;
 
     //
     // If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
