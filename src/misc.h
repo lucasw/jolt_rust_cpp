@@ -103,6 +103,10 @@ private:
   BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
 };
 
+  namespace jolt_rust_cpp {
+    struct CVec3;
+  }
+
 /// Class that determines if an object layer can collide with a broadphase layer
 class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter
 {
@@ -240,8 +244,10 @@ namespace jolt_rust_cpp {
       Ref<VehicleCollisionTester> mTesters[3];  ///< Collision testers for the wheel
 
     public:
-      SimSystem(uint32_t max_num_bodies);
-      int64_t init(uint32_t max_num_bodies);
+      SimSystem(uint32_t max_num_bodies,
+        jolt_rust_cpp::CVec3 floor_pos);
+      int64_t init(uint32_t max_num_bodies,
+        jolt_rust_cpp::CVec3 floor_pos);
       void update();
       void close();
 
@@ -253,7 +259,8 @@ namespace jolt_rust_cpp {
       float mHandBrake = 0.0f;
   };
 
-  std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies);
+  std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
+      jolt_rust_cpp::CVec3 floor_pos);
 } // namespace jolt_rust_cpp
 
 #endif  // MISC_H

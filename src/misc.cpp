@@ -30,6 +30,8 @@
 #include <cstdarg>
 #include <thread>
 
+#include "jolt_rust_cpp/src/main.rs.h"
+
 // Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
 JPH_SUPPRESS_WARNINGS
 
@@ -76,12 +78,11 @@ namespace jolt_rust_cpp {
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
 
-  SimSystem::SimSystem(uint32_t max_num_bodies) {
-    init(max_num_bodies);
+  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos) {
+    init(max_num_bodies, floor_pos);
   }
 
-  int64_t SimSystem::init(uint32_t max_num_bodies)
-  {
+  int64_t SimSystem::init(uint32_t max_num_bodies, CVec3 floor_pos) {
     // Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
     // This needs to be done before any other Jolt function is called.
     RegisterDefaultAllocator();
@@ -150,7 +151,7 @@ namespace jolt_rust_cpp {
     // Next we can create a rigid body to serve as the floor, we make a large box
     // Create the settings for the collision volume (the shape).
     // Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
-    BoxShapeSettings floor_shape_settings(Vec3(100.0f, 100.0f, 1.0f));
+    BoxShapeSettings floor_shape_settings(Vec3(50.0f, 50.0f, 1.0f));
     floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
 
     // Create the shape
@@ -158,7 +159,9 @@ namespace jolt_rust_cpp {
     ShapeRefC floor_shape = floor_shape_result.Get(); // We don't expect an error here, but you can check floor_shape_result for HasError() / GetError()
 
     // Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
-    BodyCreationSettings floor_settings(floor_shape, RVec3(0.0_r, 0.0_r, -1.0_r), Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
+    BodyCreationSettings floor_settings(floor_shape,
+        RVec3(floor_pos.x, floor_pos.y, floor_pos.z),
+        Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
 
     // Create the actual rigid body
     Body *floor = body_interface.CreateBody(floor_settings); // Note that if we run out of bodies this can return nullptr
@@ -391,8 +394,9 @@ namespace jolt_rust_cpp {
     ++step;
   }
 
-  std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies) {
-    return std::make_unique<SimSystem>(max_num_bodies);
+  std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
+      jolt_rust_cpp::CVec3 floor_pos) {
+    return std::make_unique<SimSystem>(max_num_bodies, floor_pos);
   }
 
 } // namespace jolt_rust_cpp

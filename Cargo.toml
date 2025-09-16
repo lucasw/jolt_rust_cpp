@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.99"
 cxx = "1.0.183"
 # TODO(lucasw) need to check out jolt-rust in parallel manually
 joltc-sys = {path = "../jolt-rust/crates/joltc-sys"}
+# TODO(lucasw) update to 0.25
+rerun = "0.24.1"
 
 [build-dependencies]
 cxx-build = "1.0"
