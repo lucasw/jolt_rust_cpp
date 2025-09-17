@@ -18,6 +18,7 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/ShapeCast.h>
@@ -25,12 +26,14 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 
+
 // STL includes
 #include <iostream>
 #include <cstdarg>
 #include <thread>
 
 #include "jolt_rust_cpp/src/main.rs.h"
+#include "jolt_rust_cpp/src/Perlin.h"
 
 // Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
 JPH_SUPPRESS_WARNINGS
@@ -165,27 +168,29 @@ namespace jolt_rust_cpp {
     // variant of this. We're going to use the locking version (even though we're not planning to access bodies from multiple threads)
     auto& body_interface = physics_system->GetBodyInterface();
 
-    // Next we can create a rigid body to serve as the floor, we make a large box
-    // Create the settings for the collision volume (the shape).
-    // Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
-    BoxShapeSettings floor_shape_settings(Vec3(25.0f, 25.0f, 1.0f));
-    floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
+    if (false) {
+      // Next we can create a rigid body to serve as the floor, we make a large box
+      // Create the settings for the collision volume (the shape).
+      // Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
+      BoxShapeSettings floor_shape_settings(Vec3(25.0f, 25.0f, 1.0f));
+      floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
 
-    // Create the shape
-    ShapeSettings::ShapeResult floor_shape_result = floor_shape_settings.Create();
-    ShapeRefC floor_shape = floor_shape_result.Get(); // We don't expect an error here, but you can check floor_shape_result for HasError() / GetError()
+      // Create the shape
+      ShapeSettings::ShapeResult floor_shape_result = floor_shape_settings.Create();
+      ShapeRefC floor_shape = floor_shape_result.Get(); // We don't expect an error here, but you can check floor_shape_result for HasError() / GetError()
 
-    // Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
-    BodyCreationSettings floor_settings(floor_shape,
-        RVec3(floor_pos.x, floor_pos.y, floor_pos.z),
-        Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
+      // Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
+      BodyCreationSettings floor_settings(floor_shape,
+          RVec3(floor_pos.x, floor_pos.y, floor_pos.z),
+          Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
 
-    // Create the actual rigid body
-    Body *floor = body_interface.CreateBody(floor_settings); // Note that if we run out of bodies this can return nullptr
+      // Create the actual rigid body
+      Body *floor = body_interface.CreateBody(floor_settings); // Note that if we run out of bodies this can return nullptr
 
-    floor_id = floor->GetID();
-    // Add it to the world
-    body_interface.AddBody(floor_id, EActivation::DontActivate);
+      floor_id = floor->GetID();
+      // Add it to the world
+      body_interface.AddBody(floor_id, EActivation::DontActivate);
+    }
 
     /*
     {
@@ -215,7 +220,7 @@ namespace jolt_rust_cpp {
 
       // TODO(lucasw) rotate the car so z is vertical axis, here it spawns sideways
       // Create vehicle body
-      RVec3 position(0, 0, 3);
+      RVec3 position(0, 0, 8);
       RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(
           Vec3(0, 0, -half_vehicle_height),
           new BoxShape(Vec3(half_vehicle_length, half_vehicle_width, half_vehicle_height))).Create().Get();
@@ -375,6 +380,74 @@ namespace jolt_rust_cpp {
       physics_system->AddStepListener(mVehicleConstraint);
     }
 
+    // create terrain
+    {
+      const float scale = 2.0;
+
+#ifdef _DEBUG
+      const int num = 50;
+      const float cell_size = scale * 2.0f;
+#else
+      const int num = 100;
+      const float cell_size = scale * 1.0f;
+#endif
+      const float max_height = 5.0;  // scale * 3.0f;
+
+      // Create heights
+      float heights[num + 1][num + 1];
+      for (int xi = 0; xi <= num; ++xi) {
+        for (int zi = 0; zi <= num; ++zi) {
+          heights[xi][zi] = max_height * PerlinNoise3(float(xi) * 8.0f / num, 0, float(zi) * 8.0f / num, 256, 256, 256) + floor_pos.z;
+        }
+      }
+
+      // Create regular grid of triangles
+      float center = num * cell_size / 2;
+      TriangleList triangles;
+      for (int xi = 0; xi < num; ++xi) {
+        for (int yi = 0; yi < num; ++yi) {
+
+          float x1 = cell_size * xi - center + floor_pos.x;
+          float y1 = cell_size * yi - center + floor_pos.y;
+          float x2 = x1 + cell_size;
+          float y2 = y1 + cell_size;
+
+          Float3 v1 = Float3(x1, y1, heights[xi][yi]);
+          Float3 v2 = Float3(x2, y1, heights[xi + 1][yi]);
+          Float3 v3 = Float3(x1, y2, heights[xi][yi + 1]);
+          Float3 v4 = Float3(x2, y2, heights[xi + 1][yi + 1]);
+
+          // if these are oriented backwards the object will fall through, normal needs to be up
+          triangles.push_back(Triangle(v1, v4, v3));
+          triangles.push_back(Triangle(v1, v2, v4));
+
+          if (false) {
+            cout << xi << " " << yi << ":";
+            cout << " " << v1.x << " " << v1.y << " " << v1.z;
+            cout << ", " << v2.x << " " << v2.y << " " << v2.z;
+            cout << ", " << v3.x << " " << v3.y << " " << v3.z;
+            cout << ", " << v4.x << " " << v4.y << " " << v4.z;
+            cout << "\n";
+          }
+        }
+      }
+      cout << "terrain " << -center << " to " << center << endl;
+
+      MeshShapeSettings mesh(triangles);
+      // need to create a pointer with new otherwise
+      mesh.SetEmbedded();
+
+      auto ground = body_interface.CreateBody(BodyCreationSettings(
+            // new MeshShapeSettings(triangles),
+            &mesh,
+            RVec3::sZero(),
+            Quat::sIdentity(),
+            EMotionType::Static,
+            Layers::NON_MOVING));
+      ground->SetFriction(1.0f);
+      // body_interface.AddBody(ground->GetID(), EActivation::DontActivate);
+      body_interface.AddBody(ground->GetID(), EActivation::Activate);
+    }
 
     // Optional step: Before starting the physics simulation you can optimize the broad phase. This improves collision detection performance (it's pointless here because we only have 2 bodies).
     // You should definitely not call this every frame or when e.g. streaming in a new level section as it is an expensive operation.
@@ -389,7 +462,7 @@ namespace jolt_rust_cpp {
 
   void SimSystem::close() {
     cout << "close " << step << endl;
-    auto& body_interface = physics_system->GetBodyInterface();
+    // auto& body_interface = physics_system->GetBodyInterface();
 
     /*
     // Remove the sphere from the physics system. Note that the sphere itself keeps all of its state and can be re-added at any time.
@@ -400,8 +473,10 @@ namespace jolt_rust_cpp {
     */
 
     // Remove and destroy the floor
+    /*
     body_interface.RemoveBody(floor_id);
     body_interface.DestroyBody(floor_id);
+    */
 
     // Unregisters all types with the factory and cleans up the default material
     UnregisterTypes();
@@ -464,7 +539,6 @@ namespace jolt_rust_cpp {
     // Draw our wheels (this needs to be done in the pre update since we draw the bodies too in the state before the step)
     std::array<CTf, 4> wheel_tfs;
     for (uint w = 0; w < 4; ++w) {
-      const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
       RMat44 wheel_transform = mVehicleConstraint->GetWheelWorldTransform(w, Vec3::sAxisY(), Vec3::sAxisX()); // The cylinder we draw is aligned with Y so we specify that as rotational axis
       CTf tf;
       tf.pos = to_cvec3(wheel_transform.GetTranslation());
@@ -473,6 +547,7 @@ namespace jolt_rust_cpp {
       wheel_tfs[w] = tf;
       // cout << w << " " << tf << endl;
       // TODO(lucasw) can the debug renderer work within rust framework?
+      // const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
       // mDebugRenderer->DrawCylinder(wheel_transform, 0.5f * settings->mWidth, settings->mRadius, Color::sGreen);
     }
 

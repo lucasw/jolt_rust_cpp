@@ -72,7 +72,7 @@ fn main() -> Result<(), anyhow::Error> {
     let floor_pos = ffi::CVec3 {
         x: 0.0,
         y: 0.0,
-        z: -1.0,
+        z: -2.0,
     };
     // TODO(lucasw) use quat in SimSystem
     let floor_quat = (0.0, 0.0, 0.0, 1.0);
@@ -104,7 +104,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..1100 {
+    for step in 0..2100 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
         let car_tfs = sim_system.as_mut().unwrap().update();

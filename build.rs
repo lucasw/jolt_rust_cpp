@@ -3,8 +3,8 @@ fn main() {
     println!("cargo:rerun-if-changed=NULL");
 
     cxx_build::bridge("src/main.rs")
-        // .file("src/vehicle.cpp")
         .file("src/misc.cpp")
+        .file("src/Perlin.cpp")
         // this needs to be the same as what was built by the joltc in cargo
         // could have a submodule here to make sure it's the same
         // Or is it possible to get the path to the header files in target/release/joltc-sys/...?
@@ -22,6 +22,8 @@ fn main() {
     // println!("cargo:rerun-if-changed=src/vehicle.h");
     println!("cargo:rerun-if-changed=src/misc.cpp");
     println!("cargo:rerun-if-changed=src/misc.h");
+    println!("cargo:rerun-if-changed=src/Perlin.cpp");
+    println!("cargo:rerun-if-changed=src/Perlin.h");
 
     println!("cargo:rustc-link-lib=Jolt");
 
