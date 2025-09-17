@@ -199,9 +199,9 @@ namespace jolt_rust_cpp {
       BodyCreationSettings car_body_settings(car_shape, position, Quat::sRotation(Vec3::sAxisZ(), sInitialRollAngle), EMotionType::Dynamic, Layers::MOVING);
       car_body_settings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
       car_body_settings.mMassPropertiesOverride.mMass = 1500.0f;
-      auto mCarBody = body_interface.CreateBody(car_body_settings);
+      auto car_body = body_interface.CreateBody(car_body_settings);
 
-      car_id = mCarBody->GetID();
+      car_id = car_body->GetID();
       body_interface.AddBody(car_id, EActivation::Activate);
 
       // Create vehicle constraint
@@ -320,7 +320,7 @@ namespace jolt_rust_cpp {
         vehicle.mAntiRollBars[1].mRightWheel = 3;
       }
 
-      mVehicleConstraint = new VehicleConstraint(*mCarBody, vehicle);
+      mVehicleConstraint = new VehicleConstraint(*car_body, vehicle);
 
       // The vehicle settings were tweaked with a buggy implementation of the longitudinal tire impulses, this meant that PhysicsSettings::mNumVelocitySteps times more impulse
       // could be applied than intended. To keep the behavior of the vehicle the same we increase the max longitudinal impulse by the same factor. In a future version the vehicle
@@ -369,7 +369,67 @@ namespace jolt_rust_cpp {
     Factory::sInstance = nullptr;
   }
 
+  void SimSystem::pre_physics_update()
+  {
+    auto& body_interface = physics_system->GetBodyInterface();
+    // On user input, assure that the car is active
+    if (mRight != 0.0f || mForward != 0.0f || mBrake != 0.0f || mHandBrake != 0.0f) {
+      body_interface.ActivateBody(car_id);
+    }
+
+    WheeledVehicleController *controller = static_cast<WheeledVehicleController *>(mVehicleConstraint->GetController());
+
+    // Update vehicle statistics
+    controller->GetEngine().mMaxTorque = sMaxEngineTorque;
+    controller->GetTransmission().mClutchStrength = sClutchStrength;
+
+    // Set slip ratios to the same for everything
+    float limited_slip_ratio = sLimitedSlipDifferentials? 1.4f : FLT_MAX;
+    controller->SetDifferentialLimitedSlipRatio(limited_slip_ratio);
+    for (VehicleDifferentialSettings &d : controller->GetDifferentials()) {
+      d.mLimitedSlipRatio = limited_slip_ratio;
+    }
+
+    // Pass the input on to the constraint
+    controller->SetDriverInput(mForward, mRight, mBrake, mHandBrake);
+
+    // Set the collision tester
+    mVehicleConstraint->SetVehicleCollisionTester(mTesters[sCollisionMode]);
+
+    // TODO(lucasw) need upgraded jolt-rust that uses JoltPhysics v5.3.0 (though maybe 5.1 or 5.2 works)
+    // override gravity doesn't exist in 5.0.0
+    /*
+    if (sOverrideGravity) {
+      auto car_pos = body_interface.GetPosition(car_id);
+      // When overriding gravity is requested, we cast a sphere downwards (opposite to the previous up position) and use the contact normal as the new gravity direction
+      SphereShape sphere(0.5f);
+      sphere.SetEmbedded();
+      // v5.3.0
+      // RShapeCast shape_cast(&sphere, Vec3::sOne(), RMat44::sTranslation(car_pos), -3.0f * mVehicleConstraint->GetWorldUp());
+      RShapeCast shape_cast(&sphere, Vec3::sReplicate(1.0f), RMat44::sTranslation(car_pos), -3.0f * mVehicleConstraint->GetWorldUp());
+      ShapeCastSettings settings;
+      ClosestHitCollisionCollector<CastShapeCollector> collector;
+      physics_system->GetNarrowPhaseQuery().CastShape(shape_cast, settings, car_pos, collector, SpecifiedBroadPhaseLayerFilter(BroadPhaseLayers::NON_MOVING), SpecifiedObjectLayerFilter(Layers::NON_MOVING));
+      if (collector.HadHit()) {
+        mVehicleConstraint->OverrideGravity(9.81f * collector.mHit.mPenetrationAxis.Normalized());
+      } else {
+        mVehicleConstraint->ResetGravityOverride();
+      }
+    }
+    */
+
+    // TODO(lucasw) return these transforms to caller so they can be visualized
+    // Draw our wheels (this needs to be done in the pre update since we draw the bodies too in the state before the step)
+    for (uint w = 0; w < 4; ++w) {
+      const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
+      RMat44 wheel_transform = mVehicleConstraint->GetWheelWorldTransform(w, Vec3::sAxisY(), Vec3::sAxisX()); // The cylinder we draw is aligned with Y so we specify that as rotational axis
+      // TODO(lucasw) can the debug renderer work within rust framework?
+      // mDebugRenderer->DrawCylinder(wheel_transform, 0.5f * settings->mWidth, settings->mRadius, Color::sGreen);
+    }
+  }
+
   CTf SimSystem::update() {
+    pre_physics_update();
     // cout << "update " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
 

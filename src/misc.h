@@ -249,6 +249,7 @@ namespace jolt_rust_cpp {
         jolt_rust_cpp::CVec3 floor_pos);
       int64_t init(uint32_t max_num_bodies,
         jolt_rust_cpp::CVec3 floor_pos);
+      void pre_physics_update();
       CTf update();
       void close();
 
