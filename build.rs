@@ -4,7 +4,6 @@ fn main() {
 
     cxx_build::bridge("src/main.rs")
         .file("src/misc.cpp")
-        .file("src/Perlin.cpp")
         // this needs to be the same as what was built by the joltc in cargo
         // could have a submodule here to make sure it's the same
         // Or is it possible to get the path to the header files in target/release/joltc-sys/...?

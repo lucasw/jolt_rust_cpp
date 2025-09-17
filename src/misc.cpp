@@ -33,7 +33,6 @@
 #include <thread>
 
 #include "jolt_rust_cpp/src/main.rs.h"
-#include "jolt_rust_cpp/src/Perlin.h"
 
 // Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
 JPH_SUPPRESS_WARNINGS
@@ -98,11 +97,7 @@ namespace jolt_rust_cpp {
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
 
-  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size) {
-    init(max_num_bodies, floor_pos, vehicle_half_size);
-  }
-
-  int64_t SimSystem::init(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size) {
+  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size, CTerrain terrain) {
     // Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
     // This needs to be done before any other Jolt function is called.
     RegisterDefaultAllocator();
@@ -152,7 +147,7 @@ namespace jolt_rust_cpp {
     physics_system->Init(max_num_bodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broad_phase_layer_interface, object_vs_broadphase_layer_filter, object_vs_object_layer_filter);
 
     // make the z axis the vertical axis
-    physics_system->SetGravity(RVec3(0.0, 0.0, -1.0));
+    physics_system->SetGravity(RVec3(0.0, 0.0, -0.4));
 
     // A body activation listener gets notified when bodies activate and go to sleep
     // Note that this is called from a job so whatever you do here needs to be thread safe.
@@ -382,46 +377,28 @@ namespace jolt_rust_cpp {
 
     // create terrain
     {
-      const float scale = 2.0;
-
-#ifdef _DEBUG
-      const int num = 50;
-      const float cell_size = scale * 2.0f;
-#else
-      const int num = 100;
-      const float cell_size = scale * 1.0f;
-#endif
-      const float max_height = 5.0;  // scale * 3.0f;
-
-      // Create heights
-      float heights[num + 1][num + 1];
-      for (int xi = 0; xi <= num; ++xi) {
-        for (int zi = 0; zi <= num; ++zi) {
-          heights[xi][zi] = max_height * PerlinNoise3(float(xi) * 8.0f / num, 0, float(zi) * 8.0f / num, 256, 256, 256) + floor_pos.z;
-        }
-      }
+      auto& heights = terrain.heights;
 
       // Create regular grid of triangles
-      float center = num * cell_size / 2;
+      float center = terrain.num * terrain.cell_size / 2;
       TriangleList triangles;
-      for (int xi = 0; xi < num; ++xi) {
-        for (int yi = 0; yi < num; ++yi) {
+      for (size_t xi = 0; xi < terrain.num - 1; ++xi) {
+        for (size_t yi = 0; yi < terrain.num - 1; ++yi) {
+          float x1 = terrain.cell_size * xi - center + floor_pos.x;
+          float y1 = terrain.cell_size * yi - center + floor_pos.y;
+          float x2 = x1 + terrain.cell_size;
+          float y2 = y1 + terrain.cell_size;
 
-          float x1 = cell_size * xi - center + floor_pos.x;
-          float y1 = cell_size * yi - center + floor_pos.y;
-          float x2 = x1 + cell_size;
-          float y2 = y1 + cell_size;
-
-          Float3 v1 = Float3(x1, y1, heights[xi][yi]);
-          Float3 v2 = Float3(x2, y1, heights[xi + 1][yi]);
-          Float3 v3 = Float3(x1, y2, heights[xi][yi + 1]);
-          Float3 v4 = Float3(x2, y2, heights[xi + 1][yi + 1]);
+          Float3 v1 = Float3(x1, y1, heights[xi * terrain.num + yi]);
+          Float3 v2 = Float3(x2, y1, heights[(xi + 1) * terrain.num + yi]);
+          Float3 v3 = Float3(x1, y2, heights[xi * terrain.num + yi + 1]);
+          Float3 v4 = Float3(x2, y2, heights[(xi + 1) * terrain.num + yi + 1]);
 
           // if these are oriented backwards the object will fall through, normal needs to be up
           triangles.push_back(Triangle(v1, v4, v3));
           triangles.push_back(Triangle(v1, v2, v4));
 
-          if (false) {
+          if (true) {
             cout << xi << " " << yi << ":";
             cout << " " << v1.x << " " << v1.y << " " << v1.z;
             cout << ", " << v2.x << " " << v2.y << " " << v2.z;
@@ -456,8 +433,6 @@ namespace jolt_rust_cpp {
 
     // Now we're ready to simulate the body, keep simulating until it goes to sleep
     // while (body_interface.IsActive(sphere_id))
-
-    return 0;
   }
 
   void SimSystem::close() {
@@ -593,8 +568,9 @@ namespace jolt_rust_cpp {
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
-      jolt_rust_cpp::CVec3 floor_pos, jolt_rust_cpp::CVec3 vehicle_half_size) {
-    return std::make_unique<SimSystem>(max_num_bodies, floor_pos, vehicle_half_size);
+      jolt_rust_cpp::CVec3 floor_pos, jolt_rust_cpp::CVec3 vehicle_half_size,
+      jolt_rust_cpp::CTerrain terrain) {
+    return std::make_unique<SimSystem>(max_num_bodies, floor_pos, vehicle_half_size, terrain);
   }
 
 } // namespace jolt_rust_cpp

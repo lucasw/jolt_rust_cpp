@@ -1,3 +1,6 @@
+const NUM: usize = 100;
+const NUM2: usize = NUM * NUM;
+
 #[cxx::bridge(namespace = "jolt_rust_cpp")]
 mod ffi {
     #[derive(Clone)]
@@ -30,6 +33,15 @@ mod ffi {
         wheel_br: CTf,
     }
 
+    #[derive(Clone)]
+    struct CTerrain {
+        cell_size: f32,
+        num: usize,
+        heights: [f32; 10000],
+        //  unsupported expression, array length must be an integer literal
+        // heights: [f32; NUM2],
+    }
+
     unsafe extern "C++" {
         /*
         include!("jolt_rust_cpp/src/vehicle.h");
@@ -41,6 +53,7 @@ mod ffi {
             // floor_pos_x: f32, floor_pos_y: f32, floor_pos_z: f32,
             floor_pos: CVec3,
             vehicle_half_size: CVec3,
+            terrain: CTerrain,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
         fn update(self: Pin<&mut SimSystem>) -> CarTfs;
@@ -83,7 +96,27 @@ fn main() -> Result<(), anyhow::Error> {
         z: 0.2,
     };
 
-    let mut sim_system = ffi::new_sim_system(8000, floor_pos.clone(), vehicle_half_size.clone());
+    use noise::{NoiseFn, Perlin};
+    let perlin = Perlin::new(1);
+    let mut heights: [f32; NUM2] = [0.0; NUM2];
+    let sc = 1.0 / NUM as f64;
+    for xi in 0..NUM {
+        for yi in 0..NUM {
+            heights[xi * NUM + yi] = perlin.get([xi as f64 * sc, yi as f64 * sc]) as f32;
+        }
+    }
+
+    let terrain = ffi::CTerrain {
+        cell_size: 2.5,
+        num: NUM,
+        heights,
+    };
+
+    assert_eq!(NUM * NUM, terrain.heights.len());
+    assert_eq!(NUM * NUM, NUM2);
+
+    let mut sim_system =
+        ffi::new_sim_system(8000, floor_pos.clone(), vehicle_half_size.clone(), terrain);
     let floor_half_extent = 25.0;
     let floor_half_height = 1.0;
 
