@@ -40,6 +40,7 @@ mod ffi {
             max_num_bodies: u32,
             // floor_pos_x: f32, floor_pos_y: f32, floor_pos_z: f32,
             floor_pos: CVec3,
+            vehicle_half_size: CVec3,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
         fn update(self: Pin<&mut SimSystem>) -> CarTfs;
@@ -48,11 +49,16 @@ mod ffi {
 }
 
 fn cquat_to_rerun(quat: ffi::CQuat) -> rerun::external::glam::Quat {
+    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w)
+}
+
+// cylinder conventions in jolt and rerun differ
+fn cylinder_cquat_to_rerun(quat: ffi::CQuat) -> rerun::external::glam::Quat {
     let rot = rerun::external::glam::Quat::from_euler(
         rerun::external::glam::EulerRot::XYZ,
         std::f32::consts::FRAC_PI_2,
         0.0,
-        0.0, // std::f32::consts::FRAC_PI_2,
+        0.0,
     );
 
     rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w) * rot
@@ -71,8 +77,14 @@ fn main() -> Result<(), anyhow::Error> {
     // TODO(lucasw) use quat in SimSystem
     let floor_quat = (0.0, 0.0, 0.0, 1.0);
 
-    let mut sim_system = ffi::new_sim_system(8000, floor_pos.clone());
-    let floor_half_extent = 50.0;
+    let vehicle_half_size = ffi::CVec3 {
+        x: 2.0,
+        y: 0.9,
+        z: 0.2,
+    };
+
+    let mut sim_system = ffi::new_sim_system(8000, floor_pos.clone(), vehicle_half_size.clone());
+    let floor_half_extent = 25.0;
     let floor_half_height = 1.0;
 
     rec.log_static(
@@ -90,14 +102,9 @@ fn main() -> Result<(), anyhow::Error> {
         ])]),
     )?;
 
-    // TODO(lucasw) share with SimSystem
-    let car_half_length = 2.0;
-    let car_half_width = 0.9;
-    let car_half_height = 0.2;
-
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..1900 {
+    for step in 0..1100 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
         let car_tfs = sim_system.as_mut().unwrap().update();
@@ -110,7 +117,11 @@ fn main() -> Result<(), anyhow::Error> {
             "world/car",
             &rerun::Boxes3D::from_centers_and_half_sizes(
                 [(car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z)],
-                [(car_half_width, car_half_length, car_half_height)],
+                [(
+                    vehicle_half_size.x,
+                    vehicle_half_size.y,
+                    vehicle_half_size.z,
+                )],
             )
             // .with_fill_mode(rerun::FillMode::Solid)
             .with_quaternions([rerun_quat]),
@@ -125,7 +136,7 @@ fn main() -> Result<(), anyhow::Error> {
             car_tfs.wheel_bl,
             car_tfs.wheel_br,
         ] {
-            let rerun_quat = cquat_to_rerun(wheel_tf.quat);
+            let rerun_quat = cylinder_cquat_to_rerun(wheel_tf.quat);
             rec.log(
                 format!("world/wheel{ind}"),
                 &rerun::Cylinders3D::from_lengths_and_radii(

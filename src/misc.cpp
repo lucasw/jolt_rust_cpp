@@ -95,11 +95,11 @@ namespace jolt_rust_cpp {
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
 
-  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos) {
-    init(max_num_bodies, floor_pos);
+  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size) {
+    init(max_num_bodies, floor_pos, vehicle_half_size);
   }
 
-  int64_t SimSystem::init(uint32_t max_num_bodies, CVec3 floor_pos) {
+  int64_t SimSystem::init(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size) {
     // Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
     // This needs to be done before any other Jolt function is called.
     RegisterDefaultAllocator();
@@ -168,7 +168,7 @@ namespace jolt_rust_cpp {
     // Next we can create a rigid body to serve as the floor, we make a large box
     // Create the settings for the collision volume (the shape).
     // Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
-    BoxShapeSettings floor_shape_settings(Vec3(50.0f, 50.0f, 1.0f));
+    BoxShapeSettings floor_shape_settings(Vec3(25.0f, 25.0f, 1.0f));
     floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
 
     // Create the shape
@@ -187,22 +187,26 @@ namespace jolt_rust_cpp {
     // Add it to the world
     body_interface.AddBody(floor_id, EActivation::DontActivate);
 
-    // Now create a dynamic body to bounce on the floor
-    // Note that this uses the shorthand version of creating and adding a body to the world
-    BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(0.0_r, 10.0_r, 2.0_r), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
-    sphere_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
+    /*
+    {
+      // Now create a dynamic body to bounce on the floor
+      // Note that this uses the shorthand version of creating and adding a body to the world
+      BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(0.0_r, 10.0_r, 2.0_r), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
+      sphere_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
 
-    // Now you can interact with the dynamic body, in this case we're going to give it a velocity.
-    // (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
-    body_interface.SetLinearVelocity(sphere_id, Vec3(0.0f, 0.0f, -1.0f));
+      // Now you can interact with the dynamic body, in this case we're going to give it a velocity.
+      // (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
+      body_interface.SetLinearVelocity(sphere_id, Vec3(0.0f, 0.0f, -1.0f));
+    }
+    */
 
     // create the car
     {
       const float wheel_radius = 0.3f;
       const float wheel_width = 0.2f;
-      const float half_vehicle_length = 2.0f;
-      const float half_vehicle_width = 0.9f;
-      const float half_vehicle_height = 0.2f;
+      const float half_vehicle_length = vehicle_half_size.x;
+      const float half_vehicle_width = vehicle_half_size.y;
+      const float half_vehicle_height = vehicle_half_size.z;
 
       // Create collision testers
       mTesters[0] = new VehicleCollisionTesterRay(Layers::MOVING);
@@ -213,9 +217,14 @@ namespace jolt_rust_cpp {
       // Create vehicle body
       RVec3 position(0, 0, 3);
       RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(
-          Vec3(0, -half_vehicle_height, 0),
-          new BoxShape(Vec3(half_vehicle_width, half_vehicle_height, half_vehicle_length))).Create().Get();
-      BodyCreationSettings car_body_settings(car_shape, position, Quat::sRotation(Vec3::sAxisZ(), sInitialRollAngle), EMotionType::Dynamic, Layers::MOVING);
+          Vec3(0, 0, -half_vehicle_height),
+          new BoxShape(Vec3(half_vehicle_length, half_vehicle_width, half_vehicle_height))).Create().Get();
+      BodyCreationSettings car_body_settings(
+          car_shape,
+          position,
+          Quat::sRotation(Vec3::sAxisY(), sInitialRollAngle),
+          EMotionType::Dynamic,
+          Layers::MOVING);
       car_body_settings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
       car_body_settings.mMassPropertiesOverride.mMass = 1500.0f;
       auto car_body = body_interface.CreateBody(car_body_settings);
@@ -229,22 +238,27 @@ namespace jolt_rust_cpp {
       vehicle.mMaxPitchRollAngle = sMaxRollAngle;
 
       // Suspension direction
-      Vec3 front_suspension_dir = Vec3(Tan(sFrontSuspensionSidewaysAngle), -1, Tan(sFrontSuspensionForwardAngle)).Normalized();
-      Vec3 front_steering_axis = Vec3(-Tan(sFrontKingPinAngle), 1, -Tan(sFrontCasterAngle)).Normalized();
-      Vec3 front_wheel_up = Vec3(Sin(sFrontCamber), Cos(sFrontCamber), 0);
-      Vec3 front_wheel_forward = -Vec3(-Sin(sFrontToe), 0, Cos(sFrontToe));
-      Vec3 rear_suspension_dir = Vec3(Tan(sRearSuspensionSidewaysAngle), -1, Tan(sRearSuspensionForwardAngle)).Normalized();
-      Vec3 rear_steering_axis = Vec3(-Tan(sRearKingPinAngle), 1, -Tan(sRearCasterAngle)).Normalized();
-      Vec3 rear_wheel_up = Vec3(Sin(sRearCamber), Cos(sRearCamber), 0);
-      Vec3 rear_wheel_forward = Vec3(-Sin(sRearToe), 0, Cos(sRearToe));
-      Vec3 flip_x(-1, 1, 1);
+      Vec3 front_suspension_dir = Vec3(Tan(sFrontSuspensionForwardAngle), Tan(sFrontSuspensionSidewaysAngle), -1).Normalized();
+      Vec3 front_steering_axis = Vec3(-Tan(sFrontCasterAngle), -Tan(sFrontKingPinAngle), 1).Normalized();
+      Vec3 front_wheel_up = Vec3(0, Sin(sFrontCamber), Cos(sFrontCamber));
+      Vec3 front_wheel_forward = Vec3(Cos(sFrontToe), Sin(sFrontToe), 0);
+      Vec3 rear_suspension_dir = Vec3(Tan(sRearSuspensionForwardAngle), Tan(sRearSuspensionSidewaysAngle), -1).Normalized();
+      Vec3 rear_steering_axis = Vec3(-Tan(sRearCasterAngle), -Tan(sRearKingPinAngle), 1).Normalized();
+      Vec3 rear_wheel_up = Vec3(0, Sin(sRearCamber), Cos(sRearCamber));
+      Vec3 rear_wheel_forward = Vec3(Cos(sRearToe), -Sin(sRearToe), 0);
+      Vec3 flip_lr(1, -1, 1);
+
+      // relative to body
+      auto wheel_height = -2.5f * half_vehicle_height;
+      auto wheel_x = half_vehicle_length;  // + 2.0f * wheel_radius;
+      auto wheel_y = half_vehicle_width;
 
       // Wheels, left front
       WheelSettingsWV *w1 = new WheelSettingsWV;
       w1->mPosition = Vec3(
-          half_vehicle_width,
-          -0.9f * half_vehicle_height,
-          half_vehicle_length - 2.0f * wheel_radius);
+          wheel_x,
+          wheel_y,
+          wheel_height);
       w1->mSuspensionDirection = front_suspension_dir;
       w1->mSteeringAxis = front_steering_axis;
       w1->mWheelUp = front_wheel_up;
@@ -260,13 +274,13 @@ namespace jolt_rust_cpp {
       // Right front
       WheelSettingsWV *w2 = new WheelSettingsWV;
       w2->mPosition = Vec3(
-          -half_vehicle_width,
-          -0.9f * half_vehicle_height,
-          half_vehicle_length - 2.0f * wheel_radius);
-      w2->mSuspensionDirection = flip_x * front_suspension_dir;
-      w2->mSteeringAxis = flip_x * front_steering_axis;
-      w2->mWheelUp = flip_x * front_wheel_up;
-      w2->mWheelForward = flip_x * front_wheel_forward;
+          wheel_x,
+          -wheel_y,
+          wheel_height);
+      w2->mSuspensionDirection = flip_lr * front_suspension_dir;
+      w2->mSteeringAxis = flip_lr * front_steering_axis;
+      w2->mWheelUp = flip_lr * front_wheel_up;
+      w2->mWheelForward = flip_lr * front_wheel_forward;
       w2->mSuspensionMinLength = sFrontSuspensionMinLength;
       w2->mSuspensionMaxLength = sFrontSuspensionMaxLength;
       w2->mSuspensionSpring.mFrequency = sFrontSuspensionFrequency;
@@ -278,9 +292,9 @@ namespace jolt_rust_cpp {
       // Left rear
       WheelSettingsWV *w3 = new WheelSettingsWV;
       w3->mPosition = Vec3(
-          half_vehicle_width,
-          -0.9f * half_vehicle_height,
-          -half_vehicle_length + 2.0f * wheel_radius);
+          -wheel_x,
+          wheel_y,
+          wheel_height);
       w3->mSuspensionDirection = rear_suspension_dir;
       w3->mSteeringAxis = rear_steering_axis;
       w3->mWheelUp = rear_wheel_up;
@@ -295,13 +309,13 @@ namespace jolt_rust_cpp {
       // Right rear
       WheelSettingsWV *w4 = new WheelSettingsWV;
       w4->mPosition = Vec3(
-          -half_vehicle_width,
-          -0.9f * half_vehicle_height,
-          -half_vehicle_length + 2.0f * wheel_radius);
-      w4->mSuspensionDirection = flip_x * rear_suspension_dir;
-      w4->mSteeringAxis = flip_x * rear_steering_axis;
-      w4->mWheelUp = flip_x * rear_wheel_up;
-      w4->mWheelForward = flip_x * rear_wheel_forward;
+          -wheel_x,
+          -wheel_y,
+          wheel_height);
+      w4->mSuspensionDirection = flip_lr * rear_suspension_dir;
+      w4->mSteeringAxis = flip_lr * rear_steering_axis;
+      w4->mWheelUp = flip_lr * rear_wheel_up;
+      w4->mWheelForward = flip_lr * rear_wheel_forward;
       w4->mSuspensionMinLength = sRearSuspensionMinLength;
       w4->mSuspensionMaxLength = sRearSuspensionMaxLength;
       w4->mSuspensionSpring.mFrequency = sRearSuspensionFrequency;
@@ -374,11 +388,14 @@ namespace jolt_rust_cpp {
   void SimSystem::close() {
     cout << "close " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
+
+    /*
     // Remove the sphere from the physics system. Note that the sphere itself keeps all of its state and can be re-added at any time.
     body_interface.RemoveBody(sphere_id);
 
     // Destroy the sphere. After this the sphere ID is no longer valid.
     body_interface.DestroyBody(sphere_id);
+    */
 
     // Remove and destroy the floor
     body_interface.RemoveBody(floor_id);
@@ -476,15 +493,6 @@ namespace jolt_rust_cpp {
       << "), Angular Velocity = (" << angular_vel.GetX() << ", " << angular_vel.GetY() << ", " << angular_vel.GetZ() << ")"
       << endl;
 
-    //
-    // If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
-    const int cCollisionSteps = 1;
-
-    // Step the world
-    physics_system->Update(cDeltaTime, cCollisionSteps, temp_allocator, job_system);
-
-    ++step;
-
     CarTfs tfs;
     tfs.body.pos = to_cvec3(position);
     auto jolt_rot = body_interface.GetRotation(car_id);
@@ -496,12 +504,20 @@ namespace jolt_rust_cpp {
     tfs.wheel_bl = wheel_tfs[2];
     tfs.wheel_br = wheel_tfs[3];
 
+    // If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
+    const int cCollisionSteps = 1;
+
+    // Step the world
+    physics_system->Update(cDeltaTime, cCollisionSteps, temp_allocator, job_system);
+
+    ++step;
+
     return tfs;
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
-      jolt_rust_cpp::CVec3 floor_pos) {
-    return std::make_unique<SimSystem>(max_num_bodies, floor_pos);
+      jolt_rust_cpp::CVec3 floor_pos, jolt_rust_cpp::CVec3 vehicle_half_size) {
+    return std::make_unique<SimSystem>(max_num_bodies, floor_pos, vehicle_half_size);
   }
 
 } // namespace jolt_rust_cpp

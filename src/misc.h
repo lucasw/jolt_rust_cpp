@@ -212,7 +212,8 @@ namespace jolt_rust_cpp {
       // The car
       // TODO(lucasw) separate into another class
       static inline float     sInitialRollAngle = 0;
-      static inline float     sMaxRollAngle = DegreesToRadians(60.0f);
+      // TODO(lucasw) this roll angle is relative to the y-up orientation?
+      static inline float     sMaxRollAngle = DegreesToRadians(150.0f);
       static inline float     sMaxSteeringAngle = DegreesToRadians(30.0f);
       static inline int       sCollisionMode = 2;
       static inline bool      sFourWheelDrive = false;
@@ -249,9 +250,11 @@ namespace jolt_rust_cpp {
 
     public:
       SimSystem(uint32_t max_num_bodies,
-        jolt_rust_cpp::CVec3 floor_pos);
+        jolt_rust_cpp::CVec3 floor_pos,
+        jolt_rust_cpp::CVec3 vehicle_half_size);
       int64_t init(uint32_t max_num_bodies,
-        jolt_rust_cpp::CVec3 floor_pos);
+        jolt_rust_cpp::CVec3 floor_pos,
+        jolt_rust_cpp::CVec3 vehicle_half_size);
       std::array<CTf, 4> pre_physics_update();
       CarTfs update();
       void close();
@@ -265,7 +268,8 @@ namespace jolt_rust_cpp {
   };
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
-      jolt_rust_cpp::CVec3 floor_pos);
+      jolt_rust_cpp::CVec3 floor_pos,
+      jolt_rust_cpp::CVec3 vehicle_half_size);
 } // namespace jolt_rust_cpp
 
 #endif  // MISC_H
