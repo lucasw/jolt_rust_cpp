@@ -213,7 +213,7 @@ namespace jolt_rust_cpp {
       // TODO(lucasw) separate into another class
       static inline float     sInitialRollAngle = 0;
       // TODO(lucasw) this roll angle is relative to the y-up orientation?
-      static inline float     sMaxRollAngle = DegreesToRadians(150.0f);
+      static inline float     sMaxRollAngle = DegreesToRadians(30.0f);
       static inline float     sMaxSteeringAngle = DegreesToRadians(30.0f);
       static inline int       sCollisionMode = 2;
       static inline bool      sFourWheelDrive = false;
@@ -262,7 +262,7 @@ namespace jolt_rust_cpp {
       // Player input
       float mForward = 0.025f;
       float mPreviousForward = 1.0f;  ///< Keeps track of last car direction so we know when to brake and when to accelerate
-      float mRight = 0.0f;
+      float mRight = 0.5f;
       float mBrake = 0.0f;
       float mHandBrake = 0.0f;
   };

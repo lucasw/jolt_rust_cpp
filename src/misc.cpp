@@ -236,6 +236,8 @@ namespace jolt_rust_cpp {
       VehicleConstraintSettings vehicle;
       vehicle.mDrawConstraintSize = 0.1f;
       vehicle.mMaxPitchRollAngle = sMaxRollAngle;
+      vehicle.mUp = Vec3(0.0, 0.0, 1.0);
+      vehicle.mForward = Vec3(1.0, 0.0, 0.0);
 
       // Suspension direction
       Vec3 front_suspension_dir = Vec3(Tan(sFrontSuspensionForwardAngle), Tan(sFrontSuspensionSidewaysAngle), -1).Normalized();
