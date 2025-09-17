@@ -82,7 +82,9 @@ fn main() -> Result<(), anyhow::Error> {
 
         let car_tf = sim_system.as_mut().unwrap().update();
 
-        // TODO(lucasw) need to rotate the quat for rerun?
+        // need to rotate the quat for rerun
+        // TODO(lucasw) based on changing the wheel sizes it appears the width and length
+        // are swapped, or the quat rotation is wrong here
         let rerun_quat = rerun::external::glam::Quat::from_xyzw(
             car_tf.quat.x,
             car_tf.quat.y,
@@ -98,7 +100,7 @@ fn main() -> Result<(), anyhow::Error> {
             "world/car",
             &rerun::Boxes3D::from_centers_and_half_sizes(
                 [(car_tf.pos.x, car_tf.pos.y, car_tf.pos.z)],
-                [(car_half_length, car_half_width, car_half_height)],
+                [(car_half_width, car_half_length, car_half_height)],
             )
             // .with_fill_mode(rerun::FillMode::Solid)
             .with_quaternions([rerun_quat]),

@@ -172,7 +172,7 @@ namespace jolt_rust_cpp {
 
     // Now create a dynamic body to bounce on the floor
     // Note that this uses the shorthand version of creating and adding a body to the world
-    BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(0.0_r, 0.0_r, 2.0_r), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
+    BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(0.0_r, 10.0_r, 2.0_r), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
     sphere_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
 
     // Now you can interact with the dynamic body, in this case we're going to give it a velocity.
@@ -194,8 +194,10 @@ namespace jolt_rust_cpp {
 
       // TODO(lucasw) rotate the car so z is vertical axis, here it spawns sideways
       // Create vehicle body
-      RVec3 position(0, 2, 3);
-      RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(Vec3(0, -half_vehicle_height, 0), new BoxShape(Vec3(half_vehicle_width, half_vehicle_height, half_vehicle_length))).Create().Get();
+      RVec3 position(0, 0, 3);
+      RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(
+          Vec3(0, -half_vehicle_height, 0),
+          new BoxShape(Vec3(half_vehicle_width, half_vehicle_height, half_vehicle_length))).Create().Get();
       BodyCreationSettings car_body_settings(car_shape, position, Quat::sRotation(Vec3::sAxisZ(), sInitialRollAngle), EMotionType::Dynamic, Layers::MOVING);
       car_body_settings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
       car_body_settings.mMassPropertiesOverride.mMass = 1500.0f;
@@ -236,6 +238,7 @@ namespace jolt_rust_cpp {
       w1->mSuspensionSpring.mDamping = sFrontSuspensionDamping;
       w1->mMaxSteerAngle = sMaxSteeringAngle;
       w1->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
+      w1->mRadius = wheel_radius;
 
       // Right front
       WheelSettingsWV *w2 = new WheelSettingsWV;
@@ -253,6 +256,7 @@ namespace jolt_rust_cpp {
       w2->mSuspensionSpring.mDamping = sFrontSuspensionDamping;
       w2->mMaxSteerAngle = sMaxSteeringAngle;
       w2->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
+      w2->mRadius = wheel_radius;
 
       // Left rear
       WheelSettingsWV *w3 = new WheelSettingsWV;
@@ -269,6 +273,7 @@ namespace jolt_rust_cpp {
       w3->mSuspensionSpring.mFrequency = sRearSuspensionFrequency;
       w3->mSuspensionSpring.mDamping = sRearSuspensionDamping;
       w3->mMaxSteerAngle = 0.0f;
+      w3->mRadius = wheel_radius;
 
       // Right rear
       WheelSettingsWV *w4 = new WheelSettingsWV;
@@ -285,12 +290,13 @@ namespace jolt_rust_cpp {
       w4->mSuspensionSpring.mFrequency = sRearSuspensionFrequency;
       w4->mSuspensionSpring.mDamping = sRearSuspensionDamping;
       w4->mMaxSteerAngle = 0.0f;
+      w4->mRadius = wheel_radius;
 
       vehicle.mWheels = { w1, w2, w3, w4 };
 
       for (WheelSettings *w : vehicle.mWheels)
       {
-        w->mRadius = wheel_radius;
+        // w->mRadius = wheel_radius;
         w->mWidth = wheel_width;
       }
 
@@ -333,7 +339,7 @@ namespace jolt_rust_cpp {
           });
 
       physics_system->AddConstraint(mVehicleConstraint);
-      // physics_system->AddStepListener(mVehicleConstraint);
+      physics_system->AddStepListener(mVehicleConstraint);
     }
 
 
@@ -423,6 +429,7 @@ namespace jolt_rust_cpp {
     for (uint w = 0; w < 4; ++w) {
       const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
       RMat44 wheel_transform = mVehicleConstraint->GetWheelWorldTransform(w, Vec3::sAxisY(), Vec3::sAxisX()); // The cylinder we draw is aligned with Y so we specify that as rotational axis
+                                                                                                                    cout << w << " " << wheel_transform << endl;
       // TODO(lucasw) can the debug renderer work within rust framework?
       // mDebugRenderer->DrawCylinder(wheel_transform, 0.5f * settings->mWidth, settings->mRadius, Color::sGreen);
     }
