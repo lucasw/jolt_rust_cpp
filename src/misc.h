@@ -16,6 +16,9 @@ using namespace std;
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Vehicle/VehicleConstraint.h>
 
+// TODO(lucasw) would have to bring in more files from the JoltPhysics samples to try this
+// #include <Renderer/DebugRendererImp.h>
+
 // All Jolt symbols are in the JPH namespace
 using namespace JPH;
 
@@ -177,8 +180,7 @@ namespace jolt_rust_cpp {
       JPH::PhysicsSystem * physics_system = nullptr;
       JPH::TempAllocator * temp_allocator = nullptr;
       JPH::JobSystem * job_system = nullptr;
-      // JPH::BodyInterface& body_interface;
-      // DebugRenderer * mDebugRenderer = nullptr;
+      // DebugRenderer * debug_renderer = nullptr;
 
       MyBodyActivationListener body_activation_listener;
       MyContactListener contact_listener;
@@ -249,7 +251,7 @@ namespace jolt_rust_cpp {
         jolt_rust_cpp::CVec3 floor_pos);
       int64_t init(uint32_t max_num_bodies,
         jolt_rust_cpp::CVec3 floor_pos);
-      void pre_physics_update();
+      std::array<CTf, 4> pre_physics_update();
       CTf update();
       void close();
 

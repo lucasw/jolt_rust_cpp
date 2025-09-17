@@ -74,6 +74,23 @@ static bool AssertFailedImpl(const char *inExpression, const char *inMessage, co
 
 namespace jolt_rust_cpp {
 
+  CVec3 to_cvec3(const Vec3& position) {
+    CVec3 pos;
+    pos.x = position.GetX();
+    pos.y = position.GetY();
+    pos.z = position.GetZ();
+    return pos;
+  }
+
+  CQuat to_cquat(const Quat& jolt_rot) {
+    CQuat quat;
+    quat.x = jolt_rot.GetX();
+    quat.y = jolt_rot.GetY();
+    quat.z = jolt_rot.GetZ();
+    quat.w = jolt_rot.GetW();
+    return quat;
+  }
+
 // Program entry point
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
@@ -375,7 +392,7 @@ namespace jolt_rust_cpp {
     Factory::sInstance = nullptr;
   }
 
-  void SimSystem::pre_physics_update()
+  std::array<CTf, 4> SimSystem::pre_physics_update()
   {
     auto& body_interface = physics_system->GetBodyInterface();
     // On user input, assure that the car is active
@@ -426,17 +443,25 @@ namespace jolt_rust_cpp {
 
     // TODO(lucasw) return these transforms to caller so they can be visualized
     // Draw our wheels (this needs to be done in the pre update since we draw the bodies too in the state before the step)
+    std::array<CTf, 4> wheel_tfs;
     for (uint w = 0; w < 4; ++w) {
       const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
       RMat44 wheel_transform = mVehicleConstraint->GetWheelWorldTransform(w, Vec3::sAxisY(), Vec3::sAxisX()); // The cylinder we draw is aligned with Y so we specify that as rotational axis
-                                                                                                                    cout << w << " " << wheel_transform << endl;
+      CTf tf;
+      tf.pos = to_cvec3(wheel_transform.GetTranslation());
+      auto rot = wheel_transform.GetQuaternion();
+      tf.quat = to_cquat(rot);
+      wheel_tfs[w] = tf;
+      // cout << w << " " << tf << endl;
       // TODO(lucasw) can the debug renderer work within rust framework?
       // mDebugRenderer->DrawCylinder(wheel_transform, 0.5f * settings->mWidth, settings->mRadius, Color::sGreen);
     }
+
+    return wheel_tfs;
   }
 
   CTf SimSystem::update() {
-    pre_physics_update();
+    auto wheel_tfs = pre_physics_update();
     // cout << "update " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
 
@@ -461,15 +486,9 @@ namespace jolt_rust_cpp {
     ++step;
 
     CTf tf;
-    tf.pos.x = position.GetX();
-    tf.pos.y = position.GetY();
-    tf.pos.z = position.GetZ();
-
+    tf.pos = to_cvec3(position);
     auto jolt_rot = body_interface.GetRotation(car_id);
-    tf.quat.x = jolt_rot.GetX();
-    tf.quat.y = jolt_rot.GetY();
-    tf.quat.z = jolt_rot.GetZ();
-    tf.quat.w = jolt_rot.GetW();
+    tf.quat = to_cquat(jolt_rot);
 
     return tf;
   }
