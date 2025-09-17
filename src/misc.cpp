@@ -199,7 +199,7 @@ namespace jolt_rust_cpp {
     // create the car
     {
       const float wheel_radius = 0.3f;
-      const float wheel_width = 0.1f;
+      const float wheel_width = 0.2f;
       const float half_vehicle_length = 2.0f;
       const float half_vehicle_width = 0.9f;
       const float half_vehicle_height = 0.2f;
@@ -232,7 +232,7 @@ namespace jolt_rust_cpp {
       Vec3 front_suspension_dir = Vec3(Tan(sFrontSuspensionSidewaysAngle), -1, Tan(sFrontSuspensionForwardAngle)).Normalized();
       Vec3 front_steering_axis = Vec3(-Tan(sFrontKingPinAngle), 1, -Tan(sFrontCasterAngle)).Normalized();
       Vec3 front_wheel_up = Vec3(Sin(sFrontCamber), Cos(sFrontCamber), 0);
-      Vec3 front_wheel_forward = Vec3(-Sin(sFrontToe), 0, Cos(sFrontToe));
+      Vec3 front_wheel_forward = -Vec3(-Sin(sFrontToe), 0, Cos(sFrontToe));
       Vec3 rear_suspension_dir = Vec3(Tan(sRearSuspensionSidewaysAngle), -1, Tan(sRearSuspensionForwardAngle)).Normalized();
       Vec3 rear_steering_axis = Vec3(-Tan(sRearKingPinAngle), 1, -Tan(sRearCasterAngle)).Normalized();
       Vec3 rear_wheel_up = Vec3(Sin(sRearCamber), Cos(sRearCamber), 0);
@@ -460,7 +460,7 @@ namespace jolt_rust_cpp {
     return wheel_tfs;
   }
 
-  CTf SimSystem::update() {
+  CarTfs SimSystem::update() {
     auto wheel_tfs = pre_physics_update();
     // cout << "update " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
@@ -485,12 +485,18 @@ namespace jolt_rust_cpp {
 
     ++step;
 
-    CTf tf;
-    tf.pos = to_cvec3(position);
+    CarTfs tfs;
+    tfs.body.pos = to_cvec3(position);
     auto jolt_rot = body_interface.GetRotation(car_id);
-    tf.quat = to_cquat(jolt_rot);
+    tfs.body.quat = to_cquat(jolt_rot);
 
-    return tf;
+    // TODO(lucasw) fix order)
+    tfs.wheel_fl = wheel_tfs[0];
+    tfs.wheel_fr = wheel_tfs[1];
+    tfs.wheel_bl = wheel_tfs[2];
+    tfs.wheel_br = wheel_tfs[3];
+
+    return tfs;
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,

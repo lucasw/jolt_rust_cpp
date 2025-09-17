@@ -109,6 +109,7 @@ private:
   namespace jolt_rust_cpp {
     struct CVec3;
     struct CTf;
+    struct CarTfs;
   }
 
 /// Class that determines if an object layer can collide with a broadphase layer
@@ -252,13 +253,13 @@ namespace jolt_rust_cpp {
       int64_t init(uint32_t max_num_bodies,
         jolt_rust_cpp::CVec3 floor_pos);
       std::array<CTf, 4> pre_physics_update();
-      CTf update();
+      CarTfs update();
       void close();
 
       // Player input
-      float mForward = 0.25f;
+      float mForward = 0.025f;
       float mPreviousForward = 1.0f;  ///< Keeps track of last car direction so we know when to brake and when to accelerate
-      float mRight = 0.1f;
+      float mRight = 0.0f;
       float mBrake = 0.0f;
       float mHandBrake = 0.0f;
   };

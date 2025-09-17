@@ -21,6 +21,15 @@ mod ffi {
         quat: CQuat,
     }
 
+    #[derive(Clone)]
+    struct CarTfs {
+        body: CTf,
+        wheel_fl: CTf,
+        wheel_fr: CTf,
+        wheel_bl: CTf,
+        wheel_br: CTf,
+    }
+
     unsafe extern "C++" {
         /*
         include!("jolt_rust_cpp/src/vehicle.h");
@@ -33,9 +42,20 @@ mod ffi {
             floor_pos: CVec3,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
-        fn update(self: Pin<&mut SimSystem>) -> CTf;
+        fn update(self: Pin<&mut SimSystem>) -> CarTfs;
         fn close(self: Pin<&mut SimSystem>);
     }
+}
+
+fn cquat_to_rerun(quat: ffi::CQuat) -> rerun::external::glam::Quat {
+    let rot = rerun::external::glam::Quat::from_euler(
+        rerun::external::glam::EulerRot::XYZ,
+        std::f32::consts::FRAC_PI_2,
+        0.0,
+        0.0, // std::f32::consts::FRAC_PI_2,
+    );
+
+    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w) * rot
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -80,31 +100,47 @@ fn main() -> Result<(), anyhow::Error> {
     for step in 0..1900 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
-        let car_tf = sim_system.as_mut().unwrap().update();
+        let car_tfs = sim_system.as_mut().unwrap().update();
 
         // need to rotate the quat for rerun
         // TODO(lucasw) based on changing the wheel sizes it appears the width and length
         // are swapped, or the quat rotation is wrong here
-        let rerun_quat = rerun::external::glam::Quat::from_xyzw(
-            car_tf.quat.x,
-            car_tf.quat.y,
-            car_tf.quat.z,
-            car_tf.quat.w,
-        ) * rerun::external::glam::Quat::from_euler(
-            rerun::external::glam::EulerRot::XYZ,
-            std::f32::consts::FRAC_PI_2,
-            0.0,
-            0.0, // std::f32::consts::FRAC_PI_2,
-        );
+        let rerun_quat = cquat_to_rerun(car_tfs.body.quat);
         rec.log(
             "world/car",
             &rerun::Boxes3D::from_centers_and_half_sizes(
-                [(car_tf.pos.x, car_tf.pos.y, car_tf.pos.z)],
+                [(car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z)],
                 [(car_half_width, car_half_length, car_half_height)],
             )
             // .with_fill_mode(rerun::FillMode::Solid)
             .with_quaternions([rerun_quat]),
         )?;
+
+        let half_wheel_width = 0.1;
+        let wheel_radius = 0.3;
+        let mut ind = 0;
+        for wheel_tf in [
+            car_tfs.wheel_fl,
+            car_tfs.wheel_fr,
+            car_tfs.wheel_bl,
+            car_tfs.wheel_br,
+        ] {
+            let rerun_quat = cquat_to_rerun(wheel_tf.quat);
+            rec.log(
+                format!("world/wheel{ind}"),
+                &rerun::Cylinders3D::from_lengths_and_radii(
+                    [half_wheel_width * 2.0],
+                    [wheel_radius],
+                )
+                .with_centers([rerun::external::glam::vec3(
+                    wheel_tf.pos.x,
+                    wheel_tf.pos.y,
+                    wheel_tf.pos.z,
+                )])
+                .with_quaternions([rerun_quat]),
+            )?;
+            ind += 1;
+        }
     }
 
     sim_system.as_mut().unwrap().close();
