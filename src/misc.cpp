@@ -13,6 +13,7 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Core/LinearCurve.h>
 
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -147,7 +148,7 @@ namespace jolt_rust_cpp {
     physics_system->Init(max_num_bodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broad_phase_layer_interface, object_vs_broadphase_layer_filter, object_vs_object_layer_filter);
 
     // make the z axis the vertical axis
-    physics_system->SetGravity(RVec3(0.0, 0.0, -0.4));
+    physics_system->SetGravity(RVec3(0.0, 0.0, -3.0));
 
     // A body activation listener gets notified when bodies activate and go to sleep
     // Note that this is called from a job so whatever you do here needs to be thread safe.
@@ -203,7 +204,7 @@ namespace jolt_rust_cpp {
     // create the car
     {
       const float wheel_radius = 0.3f;
-      const float wheel_width = 0.2f;
+      const float wheel_width = 0.3f;
       const float half_vehicle_length = vehicle_half_size.x;
       const float half_vehicle_width = vehicle_half_size.y;
       const float half_vehicle_height = vehicle_half_size.z;
@@ -255,6 +256,10 @@ namespace jolt_rust_cpp {
       auto wheel_x = half_vehicle_length;  // + 2.0f * wheel_radius;
       auto wheel_y = half_vehicle_width;
 
+      LinearCurve curve0;
+      curve0.AddPoint(0.0f, 10.0f);
+      curve0.AddPoint(10.0f, 10.0f);
+
       // Wheels, left front
       WheelSettingsWV *w1 = new WheelSettingsWV;
       w1->mPosition = Vec3(
@@ -272,6 +277,7 @@ namespace jolt_rust_cpp {
       w1->mMaxSteerAngle = sMaxSteeringAngle;
       w1->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
       w1->mRadius = wheel_radius;
+      w1->mLongitudinalFriction = curve0;
 
       // Right front
       WheelSettingsWV *w2 = new WheelSettingsWV;
@@ -290,6 +296,7 @@ namespace jolt_rust_cpp {
       w2->mMaxSteerAngle = sMaxSteeringAngle;
       w2->mMaxHandBrakeTorque = 0.0f; // Front wheel doesn't have hand brake
       w2->mRadius = wheel_radius;
+      w2->mLongitudinalFriction = curve0;
 
       // Left rear
       WheelSettingsWV *w3 = new WheelSettingsWV;
@@ -307,6 +314,7 @@ namespace jolt_rust_cpp {
       w3->mSuspensionSpring.mDamping = sRearSuspensionDamping;
       w3->mMaxSteerAngle = 0.0f;
       w3->mRadius = wheel_radius;
+      w3->mLongitudinalFriction = curve0;
 
       // Right rear
       WheelSettingsWV *w4 = new WheelSettingsWV;
@@ -324,6 +332,8 @@ namespace jolt_rust_cpp {
       w4->mSuspensionSpring.mDamping = sRearSuspensionDamping;
       w4->mMaxSteerAngle = 0.0f;
       w4->mRadius = wheel_radius;
+      w4->mLongitudinalFriction = curve0;
+      // w->mLateralFriction = curve1;
 
       vehicle.mWheels = { w1, w2, w3, w4 };
 
@@ -421,7 +431,7 @@ namespace jolt_rust_cpp {
             Quat::sIdentity(),
             EMotionType::Static,
             Layers::NON_MOVING));
-      ground->SetFriction(1.0f);
+      ground->SetFriction(2.9f);
       // body_interface.AddBody(ground->GetID(), EActivation::DontActivate);
       body_interface.AddBody(ground->GetID(), EActivation::Activate);
     }

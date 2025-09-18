@@ -1,4 +1,4 @@
-const NUM: usize = 100;
+const NUM: usize = 196;
 const NUM2: usize = NUM * NUM;
 
 #[cxx::bridge(namespace = "jolt_rust_cpp")]
@@ -37,7 +37,7 @@ mod ffi {
     struct CTerrain {
         cell_size: f32,
         num: usize,
-        heights: [f32; 10000],
+        heights: [f32; 38416],
         //  unsupported expression, array length must be an integer literal
         // heights: [f32; NUM2],
     }
@@ -100,12 +100,14 @@ fn main() -> Result<(), anyhow::Error> {
         z: 0.2,
     };
 
-    let cell_size = 2.5;
+    let cell_size = 3.0;
+    let mut yaw_lagging = 0.0;
 
     use noise::{NoiseFn, Perlin};
     let perlin = Perlin::new(1);
     let mut heights: [f32; NUM2] = [0.0; NUM2];
-    let sc = 16.0 / NUM as f64;
+    let sc = 10.0 / NUM as f64;
+    let sc2 = 30.0 / NUM as f64;
     let offset = -(NUM as f64 * cell_size * 0.5);
     let mut vertices = Vec::new();
     let mut colors = Vec::new();
@@ -113,12 +115,14 @@ fn main() -> Result<(), anyhow::Error> {
         for yi in 0..NUM {
             let x = xi as f64 * cell_size + offset;
             let y = yi as f64 * cell_size + offset;
-            let z = perlin.get([xi as f64 * sc, yi as f64 * sc]);
+            let z_norm = perlin.get([xi as f64 * sc, yi as f64 * sc])
+                + 0.15 * perlin.get([xi as f64 * sc2, yi as f64 * sc2]);
+            let z = z_norm * 3.0;
             vertices.push([x, y, z]);
             heights[xi * NUM + yi] = z as f32;
-            let r = (((x - offset) / 1.0) as u32 % 255) as u8;
-            let g = ((255.0 * ((z + 1.0) / 2.0)) as u32 % 255) as u8;
-            let b = (255.0 * ((z + 1.0) / 2.0)) as u8;
+            let r = (((x - offset) / 4.0) as u32 % 255) as u8;
+            let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
+            let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
             colors.push(rerun::Color::from_rgb(r, g, b));
         }
     }
@@ -217,11 +221,12 @@ fn main() -> Result<(), anyhow::Error> {
     let delta_time = 1.0 / 60.0;
 
     for step in 0..4100 {
-        rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
+        let time_s = step as f64 * delta_time as f64;
+        rec.set_timestamp_secs_since_epoch("view", time_s);
 
         let control = ffi::CControls {
-            forward: 0.1,
-            right: 0.01,
+            forward: 0.052,
+            right: (perlin.get([time_s / 10.0]) / 2.0) as f32,
         };
         let car_tfs = sim_system.as_mut().unwrap().update(control);
 
@@ -233,8 +238,26 @@ fn main() -> Result<(), anyhow::Error> {
         let rerun_pos =
             rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
         rec.log(
-            "world/car",
+            "world/car0",
             &rerun::Transform3D::from_translation_rotation(rerun_pos, rerun_quat),
+        )?;
+
+        // zero out the roll and pitch
+        let (_roll, _pitch, yaw) = rerun_quat.to_euler(rerun::external::glam::EulerRot::XYZ);
+        // lag the new yaw
+        let lag_fr = 0.98;
+        yaw_lagging = yaw_lagging * lag_fr + yaw * (1.0 - lag_fr);
+        let rerun_quat_yaw_only = rerun::external::glam::Quat::from_euler(
+            rerun::external::glam::EulerRot::XYZ,
+            0.0,
+            0.0,
+            yaw_lagging,
+        );
+        let rerun_pos =
+            rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
+        rec.log(
+            "world/car",
+            &rerun::Transform3D::from_translation_rotation(rerun_pos, rerun_quat_yaw_only),
         )?;
 
         rec.log(
@@ -251,7 +274,7 @@ fn main() -> Result<(), anyhow::Error> {
             .with_quaternions([rerun_quat]),
         )?;
 
-        let half_wheel_width = 0.1;
+        let half_wheel_width = 0.15;
         let wheel_radius = 0.3;
         let mut ind = 0;
         for wheel_tf in [

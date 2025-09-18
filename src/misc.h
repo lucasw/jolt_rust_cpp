@@ -218,7 +218,7 @@ namespace jolt_rust_cpp {
       static inline float     sMaxRollAngle = DegreesToRadians(30.0f);
       static inline float     sMaxSteeringAngle = DegreesToRadians(30.0f);
       static inline int       sCollisionMode = 2;
-      static inline bool      sFourWheelDrive = false;
+      static inline bool      sFourWheelDrive = true;
       static inline bool      sAntiRollbar = true;
       static inline bool      sLimitedSlipDifferentials = true;
       static inline bool      sOverrideGravity = false;         ///< If true, gravity is overridden to always oppose the ground normal
@@ -232,8 +232,8 @@ namespace jolt_rust_cpp {
       static inline float     sFrontSuspensionSidewaysAngle = 0.0f;
       static inline float     sFrontSuspensionMinLength = 0.3f;
       static inline float     sFrontSuspensionMaxLength = 0.5f;
-      static inline float     sFrontSuspensionFrequency = 1.5f;
-      static inline float     sFrontSuspensionDamping = 0.5f;
+      static inline float     sFrontSuspensionFrequency = 2.5f;  // 1.5f;
+      static inline float     sFrontSuspensionDamping = 0.25f;
       static inline float     sRearSuspensionForwardAngle = 0.0f;
       static inline float     sRearSuspensionSidewaysAngle = 0.0f;
       static inline float     sRearCasterAngle = 0.0f;
@@ -242,8 +242,8 @@ namespace jolt_rust_cpp {
       static inline float     sRearToe = 0.0f;
       static inline float     sRearSuspensionMinLength = 0.3f;
       static inline float     sRearSuspensionMaxLength = 0.5f;
-      static inline float     sRearSuspensionFrequency = 1.5f;
-      static inline float     sRearSuspensionDamping = 0.5f;
+      static inline float     sRearSuspensionFrequency = 2.5f;  // 1.5f;
+      static inline float     sRearSuspensionDamping = 0.25f;
 
       // Body * mCarBody;  ///< The vehicle
       JPH::BodyID car_id;
