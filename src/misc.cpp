@@ -461,11 +461,11 @@ namespace jolt_rust_cpp {
     Factory::sInstance = nullptr;
   }
 
-  std::array<CTf, 4> SimSystem::pre_physics_update()
+  std::array<CTf, 4> SimSystem::pre_physics_update(jolt_rust_cpp::CControls controls)
   {
     auto& body_interface = physics_system->GetBodyInterface();
     // On user input, assure that the car is active
-    if (mRight != 0.0f || mForward != 0.0f || mBrake != 0.0f || mHandBrake != 0.0f) {
+    if (controls.right != 0.0f || controls.forward != 0.0f || mBrake != 0.0f || mHandBrake != 0.0f) {
       body_interface.ActivateBody(car_id);
     }
 
@@ -483,7 +483,7 @@ namespace jolt_rust_cpp {
     }
 
     // Pass the input on to the constraint
-    controller->SetDriverInput(mForward, mRight, mBrake, mHandBrake);
+    controller->SetDriverInput(controls.forward, controls.right, mBrake, mHandBrake);
 
     // Set the collision tester
     mVehicleConstraint->SetVehicleCollisionTester(mTesters[sCollisionMode]);
@@ -529,8 +529,8 @@ namespace jolt_rust_cpp {
     return wheel_tfs;
   }
 
-  CarTfs SimSystem::update() {
-    auto wheel_tfs = pre_physics_update();
+  CarTfs SimSystem::update(jolt_rust_cpp::CControls controls) {
+    auto wheel_tfs = pre_physics_update(controls);
     // cout << "update " << step << endl;
     auto& body_interface = physics_system->GetBodyInterface();
 

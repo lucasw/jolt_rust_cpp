@@ -42,6 +42,12 @@ mod ffi {
         // heights: [f32; NUM2],
     }
 
+    #[derive(Clone)]
+    struct CControls {
+        forward: f32,
+        right: f32,
+    }
+
     unsafe extern "C++" {
         /*
         include!("jolt_rust_cpp/src/vehicle.h");
@@ -56,7 +62,7 @@ mod ffi {
             terrain: CTerrain,
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
-        fn update(self: Pin<&mut SimSystem>) -> CarTfs;
+        fn update(self: Pin<&mut SimSystem>, control: CControls) -> CarTfs;
         fn close(self: Pin<&mut SimSystem>);
     }
 }
@@ -213,7 +219,11 @@ fn main() -> Result<(), anyhow::Error> {
     for step in 0..4100 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
-        let car_tfs = sim_system.as_mut().unwrap().update();
+        let control = ffi::CControls {
+            forward: 0.1,
+            right: 0.01,
+        };
+        let car_tfs = sim_system.as_mut().unwrap().update(control);
 
         // need to rotate the quat for rerun
         // TODO(lucasw) based on changing the wheel sizes it appears the width and length

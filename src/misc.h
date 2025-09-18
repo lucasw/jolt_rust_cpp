@@ -111,6 +111,7 @@ private:
     struct CTf;
     struct CarTfs;
     struct CTerrain;
+    struct CControls;
   }
 
 /// Class that determines if an object layer can collide with a broadphase layer
@@ -254,14 +255,12 @@ namespace jolt_rust_cpp {
         jolt_rust_cpp::CVec3 floor_pos,
         jolt_rust_cpp::CVec3 vehicle_half_size,
         jolt_rust_cpp::CTerrain terrain);
-      std::array<CTf, 4> pre_physics_update();
-      CarTfs update();
+      std::array<CTf, 4> pre_physics_update(jolt_rust_cpp::CControls controls);
+      CarTfs update(CControls controls);
       void close();
 
-      // Player input
-      float mForward = 0.035f;
+      // Vehicle control input
       float mPreviousForward = 1.0f;  ///< Keeps track of last car direction so we know when to brake and when to accelerate
-      float mRight = 0.05f;
       float mBrake = 0.0f;
       float mHandBrake = 0.0f;
   };
