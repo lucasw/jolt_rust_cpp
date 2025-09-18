@@ -87,8 +87,6 @@ fn main() -> Result<(), anyhow::Error> {
         y: 0.0,
         z: -2.0,
     };
-    // TODO(lucasw) use quat in SimSystem
-    let floor_quat = (0.0, 0.0, 0.0, 1.0);
 
     let vehicle_half_size = ffi::CVec3 {
         x: 2.0,
@@ -96,18 +94,55 @@ fn main() -> Result<(), anyhow::Error> {
         z: 0.2,
     };
 
+    let cell_size = 2.5;
+
     use noise::{NoiseFn, Perlin};
     let perlin = Perlin::new(1);
     let mut heights: [f32; NUM2] = [0.0; NUM2];
-    let sc = 1.0 / NUM as f64;
+    let sc = 16.0 / NUM as f64;
+    let offset = -(NUM as f64 * cell_size * 0.5);
+    let mut vertices = Vec::new();
+    let mut colors = Vec::new();
     for xi in 0..NUM {
         for yi in 0..NUM {
-            heights[xi * NUM + yi] = perlin.get([xi as f64 * sc, yi as f64 * sc]) as f32;
+            let x = xi as f64 * cell_size + offset;
+            let y = yi as f64 * cell_size + offset;
+            let z = perlin.get([xi as f64 * sc, yi as f64 * sc]);
+            vertices.push([x, y, z]);
+            heights[xi * NUM + yi] = z as f32;
+            let r = (((x - offset) / 1.0) as u32 % 255) as u8;
+            let g = ((255.0 * ((z + 1.0) / 2.0)) as u32 % 255) as u8;
+            let b = (255.0 * ((z + 1.0) / 2.0)) as u8;
+            colors.push(rerun::Color::from_rgb(r, g, b));
         }
     }
 
+    let mut triangles = Vec::new();
+    for xi in 0..NUM - 1 {
+        for yi in 0..NUM - 1 {
+            let i0 = (xi * NUM + yi) as u32;
+            let i1 = ((xi + 1) * NUM + yi) as u32;
+            let i2 = (xi * NUM + yi + 1) as u32;
+            let i3 = ((xi + 1) * NUM + yi + 1) as u32;
+            triangles.push([i0, i3, i2]);
+            triangles.push([i0, i1, i3]);
+        }
+    }
+
+    rec.log_static(
+        "world/ground",
+        &rerun::Mesh3D::new(
+            // [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+            vertices,
+        )
+        // .with_vertex_normals([[0.0, 0.0, 1.0]])
+        // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
+        .with_vertex_colors(colors)
+        .with_triangle_indices(triangles),
+    )?;
+
     let terrain = ffi::CTerrain {
-        cell_size: 2.5,
+        cell_size: cell_size as f32,
         num: NUM,
         heights,
     };
@@ -117,6 +152,10 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut sim_system =
         ffi::new_sim_system(8000, floor_pos.clone(), vehicle_half_size.clone(), terrain);
+    /*
+    // TODO(lucasw) use quat in SimSystem
+    let floor_quat = (0.0, 0.0, 0.0, 1.0);
+
     let floor_half_extent = 25.0;
     let floor_half_height = 1.0;
 
@@ -134,10 +173,11 @@ fn main() -> Result<(), anyhow::Error> {
             floor_quat.3,
         ])]),
     )?;
+    */
 
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..2100 {
+    for step in 0..4100 {
         rec.set_timestamp_secs_since_epoch("view", step as f64 * delta_time as f64);
 
         let car_tfs = sim_system.as_mut().unwrap().update();

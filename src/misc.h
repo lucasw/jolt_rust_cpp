@@ -259,9 +259,9 @@ namespace jolt_rust_cpp {
       void close();
 
       // Player input
-      float mForward = 0.025f;
+      float mForward = 0.035f;
       float mPreviousForward = 1.0f;  ///< Keeps track of last car direction so we know when to brake and when to accelerate
-      float mRight = 0.5f;
+      float mRight = 0.05f;
       float mBrake = 0.0f;
       float mHandBrake = 0.0f;
   };

@@ -398,7 +398,7 @@ namespace jolt_rust_cpp {
           triangles.push_back(Triangle(v1, v4, v3));
           triangles.push_back(Triangle(v1, v2, v4));
 
-          if (true) {
+          if (false) {
             cout << xi << " " << yi << ":";
             cout << " " << v1.x << " " << v1.y << " " << v1.z;
             cout << ", " << v2.x << " " << v2.y << " " << v2.z;
@@ -539,11 +539,13 @@ namespace jolt_rust_cpp {
     Vec3 linear_vel;
     Vec3 angular_vel;
     body_interface.GetLinearAndAngularVelocity(car_id, linear_vel, angular_vel);
-    cout << "Step " << step
-      << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ()
-      << "), Linear Velocity = (" << linear_vel.GetX() << ", " << linear_vel.GetY() << ", " << linear_vel.GetZ() << ")"
-      << "), Angular Velocity = (" << angular_vel.GetX() << ", " << angular_vel.GetY() << ", " << angular_vel.GetZ() << ")"
-      << endl;
+    if (false) {
+      cout << "Step " << step
+        << ": Position = (" << position.GetX() << ", " << position.GetY() << ", " << position.GetZ()
+        << "), Linear Velocity = (" << linear_vel.GetX() << ", " << linear_vel.GetY() << ", " << linear_vel.GetZ() << ")"
+        << "), Angular Velocity = (" << angular_vel.GetX() << ", " << angular_vel.GetY() << ", " << angular_vel.GetZ() << ")"
+        << endl;
+    }
 
     CarTfs tfs;
     tfs.body.pos = to_cvec3(position);
