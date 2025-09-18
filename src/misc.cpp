@@ -17,7 +17,9 @@
 
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
@@ -577,6 +579,52 @@ namespace jolt_rust_cpp {
     ++step;
 
     return tfs;
+  }
+
+  jolt_rust_cpp::CRayCastConfig SimSystem::get_rays(CRayCastConfig ray_cast_config) const {
+    jolt_rust_cpp::CRayCastConfig ray_results;
+    // TODO(lucasw) can the rays be cast in a batch for better efficiency?
+    // TODO(lucasw) narrow vs broad phase
+    /*
+    RayCastSettings settings;
+    settings.mBackFaceMode = EBackFaceMode::CollideWithBackFaces;
+    settings.mTreatConvexAsSolid = true;
+    */
+
+    const auto& corigin = ray_cast_config.offset;
+    const auto origin = RVec3(corigin.x, corigin.y, corigin.z);
+    auto num = 0;
+    for (unsigned int i = 0; i < ray_cast_config.num_rays; ++i) {
+      auto& cdir = ray_cast_config.directions[i];
+      auto dir = RVec3(cdir.x, cdir.y, cdir.z);
+      // RRayCast ray { origin, dir };
+      // RayCastResult hit;
+      // if (physics_system->GetBroadPhaseQuery().CastRay(
+      RayCast ray { origin, dir };
+      AllHitCollisionCollector<RayCastBodyCollector> collector;
+      physics_system->GetBroadPhaseQuery().CastRay(ray, collector);
+      collector.Sort();
+      /*
+      physics_system->GetNarrowPhaseQuery().CastRay(
+            ray,
+            hit);
+            // SpecifiedBroadPhaseLayerFilter(BroadPhaseLayers::NON_MOVING)
+            // SpecifiedObjectLayerFilter(Layers::NON_MOVING))) {
+      */
+      if (!collector.mHits.empty()) {
+        const auto hit = collector.mHits[0];
+        const auto pos = origin + hit.mFraction * dir;
+        // const auto pos = ray.GetPointOnRay(hit.mFraction);
+        jolt_rust_cpp::CVec3 cpos;
+        cpos.x = pos.GetX();
+        cpos.y = pos.GetY();
+        cpos.z = pos.GetZ();
+        ray_results.directions[i] = cpos;
+        num += 1;
+      }
+    }
+    cout << num << " hits\n";
+    return ray_results;
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,

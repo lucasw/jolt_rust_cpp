@@ -1,9 +1,11 @@
 const NUM: usize = 196;
 const NUM2: usize = NUM * NUM;
 
+const NUM_RAYS: usize = 1000;
+
 #[cxx::bridge(namespace = "jolt_rust_cpp")]
 mod ffi {
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Default)]
     struct CVec3 {
         x: f32,
         y: f32,
@@ -48,6 +50,14 @@ mod ffi {
         right: f32,
     }
 
+    #[derive(Clone)]
+    struct CRayCastConfig {
+        // TODO(lucasw) hard-coded to vehicle reference frame for now
+        offset: CVec3,
+        directions: [CVec3; 1000],
+        num_rays: usize,
+    }
+
     unsafe extern "C++" {
         /*
         include!("jolt_rust_cpp/src/vehicle.h");
@@ -63,7 +73,16 @@ mod ffi {
         ) -> UniquePtr<SimSystem>;
         // fn init(max_num_bodies: u32) -> i64;
         fn update(self: Pin<&mut SimSystem>, control: CControls) -> CarTfs;
+        fn get_rays(&self, ray_cast_config: CRayCastConfig) -> CRayCastConfig;
         fn close(self: Pin<&mut SimSystem>);
+    }
+}
+
+fn ray_cast_config_default() -> ffi::CRayCastConfig {
+    ffi::CRayCastConfig {
+        offset: ffi::CVec3::default(),
+        directions: [(); NUM_RAYS].map(|_| ffi::CVec3::default()),
+        num_rays: NUM_RAYS,
     }
 }
 
@@ -87,6 +106,25 @@ fn main() -> Result<(), anyhow::Error> {
     println!("jolt_rust_cpp");
 
     let rec = rerun::RecordingStreamBuilder::new("jolt_rust_cpp").spawn()?;
+
+    let mut ray_cast_config = ray_cast_config_default();
+    ray_cast_config.offset = ffi::CVec3 {
+        x: 2.0,
+        y: 0.0,
+        z: 10.0,
+    };
+    let num_rays = ray_cast_config.directions.len();
+    for i in 0..num_rays {
+        let fr = i as f32 / num_rays as f32;
+        let angle = fr * 2.0 * std::f32::consts::PI;
+        let dir = ffi::CVec3 {
+            x: angle.cos(),
+            y: 0.0,
+            z: angle.sin(),
+        };
+        ray_cast_config.directions[i] = dir;
+    }
+    println!("ray {:?}", ray_cast_config.directions[600]);
 
     let floor_pos = ffi::CVec3 {
         x: 0.0,
@@ -229,6 +267,16 @@ fn main() -> Result<(), anyhow::Error> {
             right: (perlin.get([time_s / 10.0]) / 2.0) as f32,
         };
         let car_tfs = sim_system.as_mut().unwrap().update(control);
+
+        let ray_results = sim_system
+            .as_mut()
+            .unwrap()
+            .get_rays(ray_cast_config.clone());
+        if step == 200 {
+            for pos in ray_results.directions {
+                println!("{pos:?}");
+            }
+        }
 
         // need to rotate the quat for rerun
         // TODO(lucasw) based on changing the wheel sizes it appears the width and length

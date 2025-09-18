@@ -112,6 +112,7 @@ private:
     struct CarTfs;
     struct CTerrain;
     struct CControls;
+    struct CRayCastConfig;
   }
 
 /// Class that determines if an object layer can collide with a broadphase layer
@@ -257,6 +258,7 @@ namespace jolt_rust_cpp {
         jolt_rust_cpp::CTerrain terrain);
       std::array<CTf, 4> pre_physics_update(jolt_rust_cpp::CControls controls);
       CarTfs update(CControls controls);
+      jolt_rust_cpp::CRayCastConfig get_rays(CRayCastConfig ray_cast_config) const;
       void close();
 
       // Vehicle control input
