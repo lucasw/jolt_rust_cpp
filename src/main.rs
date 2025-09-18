@@ -175,6 +175,39 @@ fn main() -> Result<(), anyhow::Error> {
     )?;
     */
 
+    let car_cam_trans = rerun::Vec3D::from([-5.0, 0.0, 2.0]);
+    let car_cam_rot = rerun::external::glam::Quat::from_euler(
+        rerun::external::glam::EulerRot::XYZ,
+        0.0,
+        -std::f32::consts::FRAC_PI_2,
+        -std::f32::consts::FRAC_PI_2,
+    );
+    rec.log_static(
+        "world/car/chase_cam_base",
+        &rerun::Transform3D::from_translation_rotation(car_cam_trans, car_cam_rot),
+    )?;
+
+    let car_cam_trans = rerun::Vec3D::from([0.0, 0.0, 0.0]);
+    let car_cam_rot = rerun::external::glam::Quat::from_euler(
+        rerun::external::glam::EulerRot::XYZ,
+        -0.4,
+        0.0,
+        0.0,
+    );
+    rec.log_static(
+        "world/car/chase_cam_base/chase_cam",
+        &rerun::Transform3D::from_translation_rotation(car_cam_trans, car_cam_rot),
+    )?;
+
+    let aspect_ratio = 1.7;
+    let fov_y = 0.9;
+    rec.log_static(
+        "world/car/chase_cam_base/chase_cam",
+        &rerun::Pinhole::from_fov_and_aspect_ratio(fov_y, aspect_ratio)
+            .with_camera_xyz(rerun::components::ViewCoordinates::RUB)
+            .with_image_plane_distance(0.8),
+    )?;
+
     let delta_time = 1.0 / 60.0;
 
     for step in 0..4100 {
@@ -186,8 +219,16 @@ fn main() -> Result<(), anyhow::Error> {
         // TODO(lucasw) based on changing the wheel sizes it appears the width and length
         // are swapped, or the quat rotation is wrong here
         let rerun_quat = cquat_to_rerun(car_tfs.body.quat);
+
+        let rerun_pos =
+            rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
         rec.log(
             "world/car",
+            &rerun::Transform3D::from_translation_rotation(rerun_pos, rerun_quat),
+        )?;
+
+        rec.log(
+            "world/car_box",
             &rerun::Boxes3D::from_centers_and_half_sizes(
                 [(car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z)],
                 [(
