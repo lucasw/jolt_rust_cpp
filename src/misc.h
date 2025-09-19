@@ -253,7 +253,6 @@ namespace jolt_rust_cpp {
 
     public:
       SimSystem(uint32_t max_num_bodies,
-        jolt_rust_cpp::CVec3 floor_pos,
         jolt_rust_cpp::CVec3 vehicle_half_size,
         jolt_rust_cpp::CTerrain terrain);
       std::array<CTf, 4> pre_physics_update(jolt_rust_cpp::CControls controls);
@@ -268,7 +267,6 @@ namespace jolt_rust_cpp {
   };
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
-      jolt_rust_cpp::CVec3 floor_pos,
       jolt_rust_cpp::CVec3 vehicle_half_size,
       jolt_rust_cpp::CTerrain terrain);
 } // namespace jolt_rust_cpp

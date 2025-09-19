@@ -38,6 +38,7 @@ mod ffi {
     #[derive(Clone)]
     struct CTerrain {
         cell_size: f32,
+        offset: CVec3,
         num: usize,
         heights: [f32; 38416],
         //  unsupported expression, array length must be an integer literal
@@ -66,8 +67,6 @@ mod ffi {
         type SimSystem;
         fn new_sim_system(
             max_num_bodies: u32,
-            // floor_pos_x: f32, floor_pos_y: f32, floor_pos_z: f32,
-            floor_pos: CVec3,
             vehicle_half_size: CVec3,
             terrain: CTerrain,
         ) -> UniquePtr<SimSystem>;
@@ -107,29 +106,51 @@ fn main() -> Result<(), anyhow::Error> {
 
     let rec = rerun::RecordingStreamBuilder::new("jolt_rust_cpp").spawn()?;
 
-    let mut ray_cast_config = ray_cast_config_default();
-    ray_cast_config.offset = ffi::CVec3 {
-        x: 2.0,
-        y: 0.0,
-        z: 10.0,
-    };
-    let num_rays = ray_cast_config.directions.len();
-    for i in 0..num_rays {
-        let fr = i as f32 / num_rays as f32;
-        let angle = fr * 2.0 * std::f32::consts::PI;
-        let dir = ffi::CVec3 {
-            x: angle.cos(),
-            y: 0.0,
-            z: angle.sin(),
-        };
-        ray_cast_config.directions[i] = dir;
-    }
-    println!("ray {:?}", ray_cast_config.directions[600]);
+    let ray_cast_config = {
+        let max_range = 30.0;
+        let mut line_strips = Vec::new();
 
-    let floor_pos = ffi::CVec3 {
-        x: 0.0,
-        y: 0.0,
-        z: -2.0,
+        let mut ray_cast_config = ray_cast_config_default();
+        let x0 = 0.0; // 2.0;
+        let y0 = 0.0;
+        let z0 = 0.0; // 5.0;
+        ray_cast_config.offset = ffi::CVec3 {
+            x: x0,
+            y: y0,
+            z: z0,
+        };
+        let num_rays = ray_cast_config.directions.len();
+        let num_azimuth = num_rays / 10;
+        let num_layers = num_rays / num_azimuth;
+        let mut ind = 0;
+        for layer in 0..num_layers {
+            let fr_layer = layer as f32 / num_layers as f32;
+            for i in 0..num_azimuth {
+                let fr = i as f32 / num_azimuth as f32;
+                let elevation_angle = (fr_layer - 0.5) * std::f32::consts::PI;
+                let azimuth_angle = fr * 2.0 * std::f32::consts::PI;
+                let dir = ffi::CVec3 {
+                    x: max_range * azimuth_angle.cos() * elevation_angle.cos(),
+                    y: max_range * azimuth_angle.sin() * elevation_angle.cos(),
+                    z: max_range * elevation_angle.sin(),
+                };
+                let points = [[x0, y0, z0], [x0 + dir.x, y0 + dir.y, z0 + dir.z]];
+                line_strips.push(points);
+                ray_cast_config.directions[ind] = dir;
+                ind += 1;
+            }
+        }
+        println!("ray {:?}", ray_cast_config.directions[600]);
+
+        rec.log_static(
+            "world/ray_casts",
+            &rerun::LineStrips3D::new(line_strips), // .with_vertex_normals([[0.0, 0.0, 1.0]])
+                                                    // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
+                                                    // .with_vertex_colors(colors)
+                                                    // .with_triangle_indices(triangles),
+        )?;
+
+        ray_cast_config
     };
 
     let vehicle_half_size = ffi::CVec3 {
@@ -143,63 +164,74 @@ fn main() -> Result<(), anyhow::Error> {
 
     use noise::{NoiseFn, Perlin};
     let perlin = Perlin::new(1);
-    let mut heights: [f32; NUM2] = [0.0; NUM2];
-    let sc = 10.0 / NUM as f64;
-    let sc2 = 30.0 / NUM as f64;
-    let offset = -(NUM as f64 * cell_size * 0.5);
-    let mut vertices = Vec::new();
-    let mut colors = Vec::new();
-    for xi in 0..NUM {
-        for yi in 0..NUM {
-            let x = xi as f64 * cell_size + offset;
-            let y = yi as f64 * cell_size + offset;
-            let z_norm = perlin.get([xi as f64 * sc, yi as f64 * sc])
-                + 0.15 * perlin.get([xi as f64 * sc2, yi as f64 * sc2]);
-            let z = z_norm * 3.0;
-            vertices.push([x, y, z]);
-            heights[xi * NUM + yi] = z as f32;
-            let r = (((x - offset) / 4.0) as u32 % 255) as u8;
-            let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
-            let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
-            colors.push(rerun::Color::from_rgb(r, g, b));
+    let terrain = {
+        let x0 = 0.0;
+        let y0 = 0.0;
+        let z0 = -0.3;
+
+        let mut heights: [f32; NUM2] = [0.0; NUM2];
+        let sc = 10.0 / NUM as f64;
+        let sc2 = 30.0 / NUM as f64;
+        let offset = -(NUM as f64 * cell_size * 0.5);
+        let mut vertices = Vec::new();
+        let mut colors = Vec::new();
+        for xi in 0..NUM {
+            for yi in 0..NUM {
+                let x = xi as f64 * cell_size + offset;
+                let y = yi as f64 * cell_size + offset;
+                let z_norm = perlin.get([xi as f64 * sc, yi as f64 * sc])
+                    + 0.15 * perlin.get([xi as f64 * sc2, yi as f64 * sc2]);
+                let z = z_norm * 3.0;
+                vertices.push([x0 + x, y0 + y, z0 + z]);
+                heights[xi * NUM + yi] = z as f32;
+                let r = (((x - offset) / 4.0) as u32 % 255) as u8;
+                let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
+                let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
+                colors.push(rerun::Color::from_rgb(r, g, b));
+            }
         }
-    }
 
-    let mut triangles = Vec::new();
-    for xi in 0..NUM - 1 {
-        for yi in 0..NUM - 1 {
-            let i0 = (xi * NUM + yi) as u32;
-            let i1 = ((xi + 1) * NUM + yi) as u32;
-            let i2 = (xi * NUM + yi + 1) as u32;
-            let i3 = ((xi + 1) * NUM + yi + 1) as u32;
-            triangles.push([i0, i3, i2]);
-            triangles.push([i0, i1, i3]);
+        let mut triangles = Vec::new();
+        for xi in 0..NUM - 1 {
+            for yi in 0..NUM - 1 {
+                let i0 = (xi * NUM + yi) as u32;
+                let i1 = ((xi + 1) * NUM + yi) as u32;
+                let i2 = (xi * NUM + yi + 1) as u32;
+                let i3 = ((xi + 1) * NUM + yi + 1) as u32;
+                triangles.push([i0, i3, i2]);
+                triangles.push([i0, i1, i3]);
+            }
         }
-    }
 
-    rec.log_static(
-        "world/ground",
-        &rerun::Mesh3D::new(
-            // [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
-            vertices,
-        )
-        // .with_vertex_normals([[0.0, 0.0, 1.0]])
-        // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
-        .with_vertex_colors(colors)
-        .with_triangle_indices(triangles),
-    )?;
+        rec.log_static(
+            "world/ground",
+            &rerun::Mesh3D::new(
+                // [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+                vertices,
+            )
+            // .with_vertex_normals([[0.0, 0.0, 1.0]])
+            // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
+            .with_vertex_colors(colors)
+            .with_triangle_indices(triangles),
+        )?;
 
-    let terrain = ffi::CTerrain {
-        cell_size: cell_size as f32,
-        num: NUM,
-        heights,
+        let terrain = ffi::CTerrain {
+            cell_size: cell_size as f32,
+            num: NUM,
+            offset: ffi::CVec3 {
+                x: x0 as f32,
+                y: y0 as f32,
+                z: z0 as f32,
+            },
+            heights,
+        };
+
+        assert_eq!(NUM * NUM, terrain.heights.len());
+        assert_eq!(NUM * NUM, NUM2);
+        terrain
     };
 
-    assert_eq!(NUM * NUM, terrain.heights.len());
-    assert_eq!(NUM * NUM, NUM2);
-
-    let mut sim_system =
-        ffi::new_sim_system(8000, floor_pos.clone(), vehicle_half_size.clone(), terrain);
+    let mut sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
     /*
     // TODO(lucasw) use quat in SimSystem
     let floor_quat = (0.0, 0.0, 0.0, 1.0);
@@ -268,14 +300,35 @@ fn main() -> Result<(), anyhow::Error> {
         };
         let car_tfs = sim_system.as_mut().unwrap().update(control);
 
-        let ray_results = sim_system
-            .as_mut()
-            .unwrap()
-            .get_rays(ray_cast_config.clone());
-        if step == 200 {
+        {
+            let ray_results = sim_system
+                .as_mut()
+                .unwrap()
+                .get_rays(ray_cast_config.clone());
+            /*
+               if step == 200 {
+               for pos in ray_results.directions {
+               println!("{pos:?}");
+               }
+               }
+            */
+            let mut points = Vec::new();
+            points.push((
+                ray_cast_config.offset.x,
+                ray_cast_config.offset.y,
+                ray_cast_config.offset.z,
+            ));
+            let mut radii = Vec::new();
             for pos in ray_results.directions {
-                println!("{pos:?}");
+                points.push((pos.x, pos.y, pos.z));
+                radii.push(0.05);
+                // println!("{pos:?}");
             }
+
+            rec.log(
+                "world/ray_cast_results",
+                &rerun::Points3D::new(points).with_radii(radii),
+            )?;
         }
 
         // need to rotate the quat for rerun

@@ -100,7 +100,7 @@ namespace jolt_rust_cpp {
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
 
-  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 floor_pos, CVec3 vehicle_half_size, CTerrain terrain) {
+  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 vehicle_half_size, CTerrain terrain) {
     // Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
     // This needs to be done before any other Jolt function is called.
     RegisterDefaultAllocator();
@@ -166,6 +166,7 @@ namespace jolt_rust_cpp {
     // variant of this. We're going to use the locking version (even though we're not planning to access bodies from multiple threads)
     auto& body_interface = physics_system->GetBodyInterface();
 
+#if 0
     if (false) {
       // Next we can create a rigid body to serve as the floor, we make a large box
       // Create the settings for the collision volume (the shape).
@@ -189,6 +190,7 @@ namespace jolt_rust_cpp {
       // Add it to the world
       body_interface.AddBody(floor_id, EActivation::DontActivate);
     }
+#endif
 
     /*
     {
@@ -220,7 +222,8 @@ namespace jolt_rust_cpp {
       // Create vehicle body
       RVec3 position(0, 0, 8);
       RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(
-          Vec3(0, 0, -half_vehicle_height),
+          // Vec3(0, 0, -half_vehicle_height),
+          Vec3(0, 0, 0),
           new BoxShape(Vec3(half_vehicle_length, half_vehicle_width, half_vehicle_height))).Create().Get();
       BodyCreationSettings car_body_settings(
           car_shape,
@@ -396,15 +399,15 @@ namespace jolt_rust_cpp {
       TriangleList triangles;
       for (size_t xi = 0; xi < terrain.num - 1; ++xi) {
         for (size_t yi = 0; yi < terrain.num - 1; ++yi) {
-          float x1 = terrain.cell_size * xi - center + floor_pos.x;
-          float y1 = terrain.cell_size * yi - center + floor_pos.y;
+          float x1 = terrain.cell_size * xi - center + terrain.offset.x;
+          float y1 = terrain.cell_size * yi - center + terrain.offset.y;
           float x2 = x1 + terrain.cell_size;
           float y2 = y1 + terrain.cell_size;
 
-          Float3 v1 = Float3(x1, y1, heights[xi * terrain.num + yi]);
-          Float3 v2 = Float3(x2, y1, heights[(xi + 1) * terrain.num + yi]);
-          Float3 v3 = Float3(x1, y2, heights[xi * terrain.num + yi + 1]);
-          Float3 v4 = Float3(x2, y2, heights[(xi + 1) * terrain.num + yi + 1]);
+          Float3 v1 = Float3(x1, y1, heights[xi * terrain.num + yi] + terrain.offset.z);
+          Float3 v2 = Float3(x2, y1, heights[(xi + 1) * terrain.num + yi] + terrain.offset.z);
+          Float3 v3 = Float3(x1, y2, heights[xi * terrain.num + yi + 1] + terrain.offset.z);
+          Float3 v4 = Float3(x2, y2, heights[(xi + 1) * terrain.num + yi + 1] + terrain.offset.z);
 
           // if these are oriented backwards the object will fall through, normal needs to be up
           triangles.push_back(Triangle(v1, v4, v3));
@@ -585,11 +588,10 @@ namespace jolt_rust_cpp {
     jolt_rust_cpp::CRayCastConfig ray_results;
     // TODO(lucasw) can the rays be cast in a batch for better efficiency?
     // TODO(lucasw) narrow vs broad phase
-    /*
+
     RayCastSettings settings;
     settings.mBackFaceMode = EBackFaceMode::CollideWithBackFaces;
     settings.mTreatConvexAsSolid = true;
-    */
 
     const auto& corigin = ray_cast_config.offset;
     const auto origin = RVec3(corigin.x, corigin.y, corigin.z);
@@ -597,21 +599,27 @@ namespace jolt_rust_cpp {
     for (unsigned int i = 0; i < ray_cast_config.num_rays; ++i) {
       auto& cdir = ray_cast_config.directions[i];
       auto dir = RVec3(cdir.x, cdir.y, cdir.z);
-      // RRayCast ray { origin, dir };
-      // RayCastResult hit;
-      // if (physics_system->GetBroadPhaseQuery().CastRay(
-      RayCast ray { origin, dir };
-      AllHitCollisionCollector<RayCastBodyCollector> collector;
-      physics_system->GetBroadPhaseQuery().CastRay(ray, collector);
-      collector.Sort();
+
+      AllHitCollisionCollector<CastRayCollector> collector;
+
+      RRayCast ray { origin, dir };
+      RayCastResult hit;
+      hit.mFraction = 100.0f;
       /*
-      physics_system->GetNarrowPhaseQuery().CastRay(
+      const bool has_hit = physics_system->GetNarrowPhaseQuery().CastRay(
             ray,
             hit);
             // SpecifiedBroadPhaseLayerFilter(BroadPhaseLayers::NON_MOVING)
-            // SpecifiedObjectLayerFilter(Layers::NON_MOVING))) {
+            // SpecifiedObjectLayerFilter(Layers::NON_MOVING)));
       */
-      if (!collector.mHits.empty()) {
+      physics_system->GetNarrowPhaseQuery().CastRay(
+          ray,
+          settings,
+          collector);
+      collector.Sort();
+      const bool has_hit = !collector.mHits.empty();
+      num += collector.mHits.size();
+      if (has_hit) {
         const auto hit = collector.mHits[0];
         const auto pos = origin + hit.mFraction * dir;
         // const auto pos = ray.GetPointOnRay(hit.mFraction);
@@ -620,17 +628,16 @@ namespace jolt_rust_cpp {
         cpos.y = pos.GetY();
         cpos.z = pos.GetZ();
         ray_results.directions[i] = cpos;
-        num += 1;
       }
     }
-    cout << num << " hits\n";
+    // cout << num << " hits\n";
     return ray_results;
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
-      jolt_rust_cpp::CVec3 floor_pos, jolt_rust_cpp::CVec3 vehicle_half_size,
+      jolt_rust_cpp::CVec3 vehicle_half_size,
       jolt_rust_cpp::CTerrain terrain) {
-    return std::make_unique<SimSystem>(max_num_bodies, floor_pos, vehicle_half_size, terrain);
+    return std::make_unique<SimSystem>(max_num_bodies, vehicle_half_size, terrain);
   }
 
 } // namespace jolt_rust_cpp
