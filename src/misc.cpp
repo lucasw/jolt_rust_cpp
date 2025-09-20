@@ -590,7 +590,7 @@ namespace jolt_rust_cpp {
     // TODO(lucasw) narrow vs broad phase
 
     RayCastSettings settings;
-    settings.mBackFaceMode = EBackFaceMode::CollideWithBackFaces;
+    settings.SetBackFaceMode(EBackFaceMode::CollideWithBackFaces);
     settings.mTreatConvexAsSolid = true;
 
     const auto& corigin = ray_cast_config.offset;
