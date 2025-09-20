@@ -550,7 +550,7 @@ namespace jolt_rust_cpp {
     auto& body_interface = physics_system->GetBodyInterface();
 
     // Output current position and velocity of the sphere
-    RVec3 position = body_interface.GetCenterOfMassPosition(car_id);
+    RVec3 position = body_interface.GetPosition(car_id);
     Vec3 linear_vel;
     Vec3 angular_vel;
     body_interface.GetLinearAndAngularVelocity(car_id, linear_vel, angular_vel);

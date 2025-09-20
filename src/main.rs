@@ -1,3 +1,5 @@
+use rerun::external::glam;
+
 const NUM: usize = 196;
 const NUM2: usize = NUM * NUM;
 
@@ -85,20 +87,15 @@ fn ray_cast_config_default() -> ffi::CRayCastConfig {
     }
 }
 
-fn cquat_to_rerun(quat: ffi::CQuat) -> rerun::external::glam::Quat {
-    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w)
+fn cquat_to_rerun(quat: ffi::CQuat) -> glam::Quat {
+    glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w)
 }
 
 // cylinder conventions in jolt and rerun differ
-fn cylinder_cquat_to_rerun(quat: ffi::CQuat) -> rerun::external::glam::Quat {
-    let rot = rerun::external::glam::Quat::from_euler(
-        rerun::external::glam::EulerRot::XYZ,
-        std::f32::consts::FRAC_PI_2,
-        0.0,
-        0.0,
-    );
+fn cylinder_cquat_to_rerun(quat: ffi::CQuat) -> glam::Quat {
+    let rot = glam::Quat::from_euler(glam::EulerRot::XYZ, std::f32::consts::FRAC_PI_2, 0.0, 0.0);
 
-    rerun::external::glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w) * rot
+    glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w) * rot
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -111,20 +108,20 @@ fn main() -> Result<(), anyhow::Error> {
         let mut line_strips = Vec::new();
 
         let mut ray_cast_config = ray_cast_config_default();
-        let x0 = 0.0; // 2.0;
+        let x0 = 2.5;
         let y0 = 0.0;
-        let z0 = 0.0; // 5.0;
+        let z0 = 2.0;
         ray_cast_config.offset = ffi::CVec3 {
             x: x0,
             y: y0,
             z: z0,
         };
         let num_rays = ray_cast_config.directions.len();
-        let num_azimuth = num_rays / 10;
+        let num_azimuth = num_rays / 20;
         let num_layers = num_rays / num_azimuth;
         let mut ind = 0;
         for layer in 0..num_layers {
-            let fr_layer = layer as f32 / num_layers as f32;
+            let fr_layer = 0.125 + (layer as f32 / num_layers as f32) * 0.75;
             for i in 0..num_azimuth {
                 let fr = i as f32 / num_azimuth as f32;
                 let elevation_angle = (fr_layer - 0.5) * std::f32::consts::PI;
@@ -256,8 +253,8 @@ fn main() -> Result<(), anyhow::Error> {
     */
 
     let car_cam_trans = rerun::Vec3D::from([-5.0, 0.0, 2.0]);
-    let car_cam_rot = rerun::external::glam::Quat::from_euler(
-        rerun::external::glam::EulerRot::XYZ,
+    let car_cam_rot = glam::Quat::from_euler(
+        glam::EulerRot::XYZ,
         0.0,
         -std::f32::consts::FRAC_PI_2,
         -std::f32::consts::FRAC_PI_2,
@@ -268,12 +265,7 @@ fn main() -> Result<(), anyhow::Error> {
     )?;
 
     let car_cam_trans = rerun::Vec3D::from([0.0, 0.0, 0.0]);
-    let car_cam_rot = rerun::external::glam::Quat::from_euler(
-        rerun::external::glam::EulerRot::XYZ,
-        -0.4,
-        0.0,
-        0.0,
-    );
+    let car_cam_rot = glam::Quat::from_euler(glam::EulerRot::XYZ, -0.4, 0.0, 0.0);
     rec.log_static(
         "world/car/chase_cam_base/chase_cam",
         &rerun::Transform3D::from_translation_rotation(car_cam_trans, car_cam_rot),
@@ -301,10 +293,44 @@ fn main() -> Result<(), anyhow::Error> {
         let car_tfs = sim_system.as_mut().unwrap().update(control);
 
         {
-            let ray_results = sim_system
-                .as_mut()
-                .unwrap()
-                .get_rays(ray_cast_config.clone());
+            let mut car_ray_cast_config = ray_cast_config.clone();
+
+            let scale = glam::Vec3::new(1.0, 1.0, 1.0);
+            let rotation = glam::Quat::from_xyzw(
+                car_tfs.body.quat.x,
+                car_tfs.body.quat.y,
+                car_tfs.body.quat.z,
+                car_tfs.body.quat.w,
+            );
+            let translation =
+                glam::Vec3::new(car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z);
+            let affine =
+                glam::f32::Affine3A::from_scale_rotation_translation(scale, rotation, translation);
+
+            let origin = glam::Vec3::new(
+                ray_cast_config.offset.x,
+                ray_cast_config.offset.y,
+                ray_cast_config.offset.z,
+            );
+            let world_origin = affine.transform_point3(origin);
+
+            car_ray_cast_config.offset = ffi::CVec3 {
+                x: world_origin.x,
+                y: world_origin.y,
+                z: world_origin.z,
+            };
+
+            for cdir in car_ray_cast_config.directions.iter_mut() {
+                let dir = glam::Vec3::new(cdir.x, cdir.y, cdir.z);
+                let car_dir = rotation.mul_vec3(dir);
+                *cdir = ffi::CVec3 {
+                    x: car_dir.x,
+                    y: car_dir.y,
+                    z: car_dir.z,
+                };
+            }
+
+            let ray_results = sim_system.as_mut().unwrap().get_rays(car_ray_cast_config);
             /*
                if step == 200 {
                for pos in ray_results.directions {
@@ -321,7 +347,7 @@ fn main() -> Result<(), anyhow::Error> {
             let mut radii = Vec::new();
             for pos in ray_results.directions {
                 points.push((pos.x, pos.y, pos.z));
-                radii.push(0.05);
+                radii.push(0.025);
                 // println!("{pos:?}");
             }
 
@@ -344,16 +370,12 @@ fn main() -> Result<(), anyhow::Error> {
         )?;
 
         // zero out the roll and pitch
-        let (_roll, _pitch, yaw) = rerun_quat.to_euler(rerun::external::glam::EulerRot::XYZ);
+        let (_roll, _pitch, yaw) = rerun_quat.to_euler(glam::EulerRot::XYZ);
         // lag the new yaw
         let lag_fr = 0.98;
         yaw_lagging = yaw_lagging * lag_fr + yaw * (1.0 - lag_fr);
-        let rerun_quat_yaw_only = rerun::external::glam::Quat::from_euler(
-            rerun::external::glam::EulerRot::XYZ,
-            0.0,
-            0.0,
-            yaw_lagging,
-        );
+        let rerun_quat_yaw_only =
+            glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, yaw_lagging);
         let rerun_pos =
             rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
         rec.log(
@@ -391,11 +413,7 @@ fn main() -> Result<(), anyhow::Error> {
                     [half_wheel_width * 2.0],
                     [wheel_radius],
                 )
-                .with_centers([rerun::external::glam::vec3(
-                    wheel_tf.pos.x,
-                    wheel_tf.pos.y,
-                    wheel_tf.pos.z,
-                )])
+                .with_centers([glam::vec3(wheel_tf.pos.x, wheel_tf.pos.y, wheel_tf.pos.z)])
                 .with_quaternions([rerun_quat]),
             )?;
             ind += 1;
