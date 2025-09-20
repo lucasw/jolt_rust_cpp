@@ -1,13 +1,19 @@
+use cmake;
+
 fn main() {
     // force rebuild if this file changes
     println!("cargo:rerun-if-changed=NULL");
+
+    let dst = cmake::build("JoltPhysics/Build");
+
+    println!("cargo:rustc-link-search=native={}", dst.display());
 
     cxx_build::bridge("src/main.rs")
         .file("src/misc.cpp")
         // this needs to be the same as what was built by the joltc in cargo
         // could have a submodule here to make sure it's the same
         // Or is it possible to get the path to the header files in target/release/joltc-sys/...?
-        .include("../jolt-rust/crates/joltc-sys/JoltC/JoltPhysics")
+        .include("JoltPhysics")
         // This doesn't eliminate the 'Version mismatch' error message
         // maybe it's because jolt-sys has different settings, try matching those
         // or need to recompile all of jolt, don't use jolt-sys at all
@@ -24,6 +30,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/Perlin.cpp");
     println!("cargo:rerun-if-changed=src/Perlin.h");
 
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    println!("cargo:rustc-link-search=native={}/lib", out_dir.display());
     println!("cargo:rustc-link-lib=Jolt");
 
     // On macOS and Linux, we need to explicitly link against the C++ standard
