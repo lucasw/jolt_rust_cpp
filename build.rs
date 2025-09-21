@@ -9,7 +9,8 @@ fn main() {
         // TODO(lucasw) still only works in debug mode
         // in release get undefined reference to `JPH::AssertFailed'
         // no matter which settings of JPH_ENABLE_ASSERTS used
-        .define("DBUILD_USE_ASSERTS", "ON")
+        // "USE_ASSERTS" -> -DUSE_ASERTS on command line -> USE_ASSERTS in cmake file
+        .define("USE_ASSERTS", "ON")
         .build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -23,7 +24,7 @@ fn main() {
         .define("JPH_PROFILE_ENABLED", Some("1"))
         // TODO(lucasw) there is an issue here with debug builds vs release builds,
         // only debug builds are currently working
-        // .define("JPH_ENABLE_ASSERTS", Some("1"))
+        .define("JPH_ENABLE_ASSERTS", Some("1"))
         .std("c++20")
         .compile("vehicle_jolt");
 
