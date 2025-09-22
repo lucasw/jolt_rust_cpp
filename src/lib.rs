@@ -1,9 +1,9 @@
 use noise::{NoiseFn, Perlin};
 use rerun::external::glam;
 
+// include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 const NUM: usize = 196;
 const NUM2: usize = NUM * NUM;
-
 const NUM_RAYS: usize = 1000;
 
 #[cxx::bridge(namespace = "jolt_rust_cpp")]
@@ -39,6 +39,24 @@ pub mod ffi {
     }
 
     #[derive(Clone)]
+    struct CControls {
+        forward: f32,
+        right: f32,
+    }
+
+    // TODO(lucasw) this doesn't work because the cxx bridge macro happens before
+    // the include macro "error[cxxbridge]: unsupported item"
+    // include!(concat!(env!("OUT_DIR"), "/array_structs.rs"));
+    // TODO(lucasw) have to maintain these hard coded numbers manually
+    #[derive(Clone)]
+    struct CRayCastConfig {
+        // TODO(lucasw) hard-coded to vehicle reference frame for now
+        offset: CVec3,
+        directions: [CVec3; 1000],
+        num_rays: usize,
+    }
+
+    #[derive(Clone)]
     struct CTerrain {
         cell_size: f32,
         offset: CVec3,
@@ -48,24 +66,7 @@ pub mod ffi {
         // heights: [f32; NUM2],
     }
 
-    #[derive(Clone)]
-    struct CControls {
-        forward: f32,
-        right: f32,
-    }
-
-    #[derive(Clone)]
-    struct CRayCastConfig {
-        // TODO(lucasw) hard-coded to vehicle reference frame for now
-        offset: CVec3,
-        directions: [CVec3; 1000],
-        num_rays: usize,
-    }
-
     unsafe extern "C++" {
-        /*
-        include!("jolt_rust_cpp/src/vehicle.h");
-        */
         include!("jolt_rust_cpp/src/misc.h");
         type SimSystem;
         fn new_sim_system(
