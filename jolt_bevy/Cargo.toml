@@ -1,0 +1,18 @@
+[package]
+name = "jolt_bevy"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+anyhow = "1.0.100"
+bevy = { version = "0.16.1", features = ["dynamic_linking"] }
+cxx = "1.0.185"
+glam = "0.30.7"
+jolt_rust_cpp = { version = "0.1.0", path = "../jolt_rust_cpp" }
+noise = "0.9.0"
