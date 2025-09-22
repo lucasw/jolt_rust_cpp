@@ -15,7 +15,7 @@ pub mod ffi {
         z: f32,
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct CQuat {
         x: f32,
         y: f32,
@@ -23,7 +23,7 @@ pub mod ffi {
         w: f32,
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct CTf {
         pos: CVec3,
         quat: CQuat,
