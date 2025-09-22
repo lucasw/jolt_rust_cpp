@@ -1,3 +1,4 @@
+use noise::{NoiseFn, Perlin};
 use rerun::external::glam;
 
 const NUM: usize = 196;
@@ -87,7 +88,19 @@ fn ray_cast_config_default() -> ffi::CRayCastConfig {
     }
 }
 
-fn cquat_to_rerun(quat: ffi::CQuat) -> glam::Quat {
+fn cvec3_to_glam(vec: &ffi::CVec3) -> glam::Vec3 {
+    glam::Vec3::new(vec.x, vec.y, vec.z)
+}
+
+fn glam_to_cvec3(vec: &glam::Vec3) -> ffi::CVec3 {
+    ffi::CVec3 {
+        x: vec.x,
+        y: vec.y,
+        z: vec.z,
+    }
+}
+
+fn cquat_to_glam(quat: &ffi::CQuat) -> glam::Quat {
     glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w)
 }
 
@@ -98,57 +111,149 @@ fn cylinder_cquat_to_rerun(quat: ffi::CQuat) -> glam::Quat {
     glam::Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w) * rot
 }
 
+fn make_terrain(
+    cell_size: f64,
+    perlin: Perlin,
+) -> (
+    ffi::CTerrain,
+    Vec<[f64; 3]>,
+    Vec<[u32; 3]>,
+    Vec<rerun::Color>,
+) {
+    let x0 = 0.0;
+    let y0 = 0.0;
+    let z0 = -0.3;
+
+    let mut heights: [f32; NUM2] = [0.0; NUM2];
+    let sc = 10.0 / NUM as f64;
+    let sc2 = 30.0 / NUM as f64;
+    let offset = -(NUM as f64 * cell_size * 0.5);
+    let mut vertices = Vec::new();
+    let mut colors = Vec::new();
+    for xi in 0..NUM {
+        for yi in 0..NUM {
+            let x = xi as f64 * cell_size + offset;
+            let y = yi as f64 * cell_size + offset;
+            let z_norm = perlin.get([xi as f64 * sc, yi as f64 * sc])
+                + 0.15 * perlin.get([xi as f64 * sc2, yi as f64 * sc2]);
+            let z = z_norm * 3.0;
+            vertices.push([x0 + x, y0 + y, z0 + z]);
+            heights[xi * NUM + yi] = z as f32;
+            let r = (((x - offset) / 4.0) as u32 % 255) as u8;
+            let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
+            let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
+            colors.push(rerun::Color::from_rgb(r, g, b));
+        }
+    }
+
+    let mut triangles = Vec::new();
+    for xi in 0..NUM - 1 {
+        for yi in 0..NUM - 1 {
+            let i0 = (xi * NUM + yi) as u32;
+            let i1 = ((xi + 1) * NUM + yi) as u32;
+            let i2 = (xi * NUM + yi + 1) as u32;
+            let i3 = ((xi + 1) * NUM + yi + 1) as u32;
+            triangles.push([i0, i3, i2]);
+            triangles.push([i0, i1, i3]);
+        }
+    }
+
+    let terrain = ffi::CTerrain {
+        cell_size: cell_size as f32,
+        num: NUM,
+        offset: ffi::CVec3 {
+            x: x0 as f32,
+            y: y0 as f32,
+            z: z0 as f32,
+        },
+        heights,
+    };
+
+    assert_eq!(NUM * NUM, terrain.heights.len());
+    assert_eq!(NUM * NUM, NUM2);
+    (terrain, vertices, triangles, colors)
+}
+
+fn make_ray_casts() -> (ffi::CRayCastConfig, Vec<[[f32; 3]; 2]>) {
+    let max_range = 30.0;
+    let mut line_strips = Vec::new();
+
+    let mut ray_cast_config = ray_cast_config_default();
+    let x0 = 2.5;
+    let y0 = 0.0;
+    let z0 = 2.0;
+    ray_cast_config.offset = ffi::CVec3 {
+        x: x0,
+        y: y0,
+        z: z0,
+    };
+    let num_rays = ray_cast_config.directions.len();
+    let num_azimuth = num_rays / 20;
+    let num_layers = num_rays / num_azimuth;
+    let mut ind = 0;
+    for layer in 0..num_layers {
+        let fr_layer = 0.125 + (layer as f32 / num_layers as f32) * 0.75;
+        for i in 0..num_azimuth {
+            let fr = i as f32 / num_azimuth as f32;
+            let elevation_angle = (fr_layer - 0.5) * std::f32::consts::PI;
+            let azimuth_angle = fr * 2.0 * std::f32::consts::PI;
+            let dir = ffi::CVec3 {
+                x: max_range * azimuth_angle.cos() * elevation_angle.cos(),
+                y: max_range * azimuth_angle.sin() * elevation_angle.cos(),
+                z: max_range * elevation_angle.sin(),
+            };
+            let points = [[x0, y0, z0], [x0 + dir.x, y0 + dir.y, z0 + dir.z]];
+            line_strips.push(points);
+            ray_cast_config.directions[ind] = dir;
+            ind += 1;
+        }
+    }
+    println!("ray {:?}", ray_cast_config.directions[600]);
+
+    (ray_cast_config, line_strips)
+}
+
+// rotate the ray casts into the vehicle frame
+fn transform_ray_cast_config(
+    ray_cast_config: &ffi::CRayCastConfig,
+    pos: &ffi::CVec3,
+    quat: &ffi::CQuat,
+) -> ffi::CRayCastConfig {
+    let mut car_ray_cast_config = ray_cast_config.clone();
+
+    let scale = glam::Vec3::new(1.0, 1.0, 1.0);
+    let rotation = cquat_to_glam(&quat);
+    let translation = cvec3_to_glam(&pos);
+    let affine = glam::f32::Affine3A::from_scale_rotation_translation(scale, rotation, translation);
+
+    let origin = cvec3_to_glam(&ray_cast_config.offset);
+    let world_origin = affine.transform_point3(origin);
+
+    car_ray_cast_config.offset = glam_to_cvec3(&world_origin);
+
+    for cdir in car_ray_cast_config.directions.iter_mut() {
+        let dir = cvec3_to_glam(&cdir);
+        let car_dir = rotation.mul_vec3(dir);
+        *cdir = glam_to_cvec3(&car_dir);
+    }
+
+    car_ray_cast_config
+}
+
 fn main() -> Result<(), anyhow::Error> {
     println!("jolt_rust_cpp");
 
     let rec = rerun::RecordingStreamBuilder::new("jolt_rust_cpp").spawn()?;
 
-    let ray_cast_config = {
-        let max_range = 30.0;
-        let mut line_strips = Vec::new();
+    let (ray_cast_config, ray_cast_line_strips) = make_ray_casts();
 
-        let mut ray_cast_config = ray_cast_config_default();
-        let x0 = 2.5;
-        let y0 = 0.0;
-        let z0 = 2.0;
-        ray_cast_config.offset = ffi::CVec3 {
-            x: x0,
-            y: y0,
-            z: z0,
-        };
-        let num_rays = ray_cast_config.directions.len();
-        let num_azimuth = num_rays / 20;
-        let num_layers = num_rays / num_azimuth;
-        let mut ind = 0;
-        for layer in 0..num_layers {
-            let fr_layer = 0.125 + (layer as f32 / num_layers as f32) * 0.75;
-            for i in 0..num_azimuth {
-                let fr = i as f32 / num_azimuth as f32;
-                let elevation_angle = (fr_layer - 0.5) * std::f32::consts::PI;
-                let azimuth_angle = fr * 2.0 * std::f32::consts::PI;
-                let dir = ffi::CVec3 {
-                    x: max_range * azimuth_angle.cos() * elevation_angle.cos(),
-                    y: max_range * azimuth_angle.sin() * elevation_angle.cos(),
-                    z: max_range * elevation_angle.sin(),
-                };
-                let points = [[x0, y0, z0], [x0 + dir.x, y0 + dir.y, z0 + dir.z]];
-                line_strips.push(points);
-                ray_cast_config.directions[ind] = dir;
-                ind += 1;
-            }
-        }
-        println!("ray {:?}", ray_cast_config.directions[600]);
-
-        rec.log_static(
-            "world/ray_casts",
-            &rerun::LineStrips3D::new(line_strips), // .with_vertex_normals([[0.0, 0.0, 1.0]])
-                                                    // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
-                                                    // .with_vertex_colors(colors)
-                                                    // .with_triangle_indices(triangles),
-        )?;
-
-        ray_cast_config
-    };
+    rec.log_static(
+        "world/ray_casts",
+        &rerun::LineStrips3D::new(ray_cast_line_strips), // .with_vertex_normals([[0.0, 0.0, 1.0]])
+                                                         // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
+                                                         // .with_vertex_colors(colors)
+                                                         // .with_triangle_indices(triangles),
+    )?;
 
     let vehicle_half_size = ffi::CVec3 {
         x: 2.0,
@@ -159,74 +264,21 @@ fn main() -> Result<(), anyhow::Error> {
     let cell_size = 3.0;
     let mut yaw_lagging = 0.0;
 
-    use noise::{NoiseFn, Perlin};
     let perlin = Perlin::new(1);
-    let terrain = {
-        let x0 = 0.0;
-        let y0 = 0.0;
-        let z0 = -0.3;
 
-        let mut heights: [f32; NUM2] = [0.0; NUM2];
-        let sc = 10.0 / NUM as f64;
-        let sc2 = 30.0 / NUM as f64;
-        let offset = -(NUM as f64 * cell_size * 0.5);
-        let mut vertices = Vec::new();
-        let mut colors = Vec::new();
-        for xi in 0..NUM {
-            for yi in 0..NUM {
-                let x = xi as f64 * cell_size + offset;
-                let y = yi as f64 * cell_size + offset;
-                let z_norm = perlin.get([xi as f64 * sc, yi as f64 * sc])
-                    + 0.15 * perlin.get([xi as f64 * sc2, yi as f64 * sc2]);
-                let z = z_norm * 3.0;
-                vertices.push([x0 + x, y0 + y, z0 + z]);
-                heights[xi * NUM + yi] = z as f32;
-                let r = (((x - offset) / 4.0) as u32 % 255) as u8;
-                let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
-                let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
-                colors.push(rerun::Color::from_rgb(r, g, b));
-            }
-        }
+    let (terrain, vertices, triangles, colors) = make_terrain(cell_size, perlin);
 
-        let mut triangles = Vec::new();
-        for xi in 0..NUM - 1 {
-            for yi in 0..NUM - 1 {
-                let i0 = (xi * NUM + yi) as u32;
-                let i1 = ((xi + 1) * NUM + yi) as u32;
-                let i2 = (xi * NUM + yi + 1) as u32;
-                let i3 = ((xi + 1) * NUM + yi + 1) as u32;
-                triangles.push([i0, i3, i2]);
-                triangles.push([i0, i1, i3]);
-            }
-        }
-
-        rec.log_static(
-            "world/ground",
-            &rerun::Mesh3D::new(
-                // [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
-                vertices,
-            )
-            // .with_vertex_normals([[0.0, 0.0, 1.0]])
-            // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
-            .with_vertex_colors(colors)
-            .with_triangle_indices(triangles),
-        )?;
-
-        let terrain = ffi::CTerrain {
-            cell_size: cell_size as f32,
-            num: NUM,
-            offset: ffi::CVec3 {
-                x: x0 as f32,
-                y: y0 as f32,
-                z: z0 as f32,
-            },
-            heights,
-        };
-
-        assert_eq!(NUM * NUM, terrain.heights.len());
-        assert_eq!(NUM * NUM, NUM2);
-        terrain
-    };
+    rec.log_static(
+        "world/ground",
+        &rerun::Mesh3D::new(
+            // [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+            vertices,
+        )
+        // .with_vertex_normals([[0.0, 0.0, 1.0]])
+        // .with_vertex_colors([0x0000FFFF, 0x00FF00FF, 0xFF0000FF])
+        .with_vertex_colors(colors)
+        .with_triangle_indices(triangles),
+    )?;
 
     let mut sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
     /*
@@ -292,63 +344,20 @@ fn main() -> Result<(), anyhow::Error> {
         };
         let car_tfs = sim_system.as_mut().unwrap().update(control);
 
+        let car_ray_cast_config =
+            transform_ray_cast_config(&ray_cast_config, &car_tfs.body.pos, &car_tfs.body.quat);
+        let ray_results = sim_system.as_mut().unwrap().get_rays(car_ray_cast_config);
         {
-            let mut car_ray_cast_config = ray_cast_config.clone();
-
-            let scale = glam::Vec3::new(1.0, 1.0, 1.0);
-            let rotation = glam::Quat::from_xyzw(
-                car_tfs.body.quat.x,
-                car_tfs.body.quat.y,
-                car_tfs.body.quat.z,
-                car_tfs.body.quat.w,
-            );
-            let translation =
-                glam::Vec3::new(car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z);
-            let affine =
-                glam::f32::Affine3A::from_scale_rotation_translation(scale, rotation, translation);
-
-            let origin = glam::Vec3::new(
-                ray_cast_config.offset.x,
-                ray_cast_config.offset.y,
-                ray_cast_config.offset.z,
-            );
-            let world_origin = affine.transform_point3(origin);
-
-            car_ray_cast_config.offset = ffi::CVec3 {
-                x: world_origin.x,
-                y: world_origin.y,
-                z: world_origin.z,
-            };
-
-            for cdir in car_ray_cast_config.directions.iter_mut() {
-                let dir = glam::Vec3::new(cdir.x, cdir.y, cdir.z);
-                let car_dir = rotation.mul_vec3(dir);
-                *cdir = ffi::CVec3 {
-                    x: car_dir.x,
-                    y: car_dir.y,
-                    z: car_dir.z,
-                };
-            }
-
-            let ray_results = sim_system.as_mut().unwrap().get_rays(car_ray_cast_config);
-            /*
-               if step == 200 {
-               for pos in ray_results.directions {
-               println!("{pos:?}");
-               }
-               }
-            */
             let mut points = Vec::new();
             points.push((
-                ray_cast_config.offset.x,
-                ray_cast_config.offset.y,
-                ray_cast_config.offset.z,
+                ray_results.offset.x,
+                ray_results.offset.y,
+                ray_results.offset.z,
             ));
             let mut radii = Vec::new();
             for pos in ray_results.directions {
                 points.push((pos.x, pos.y, pos.z));
                 radii.push(0.025);
-                // println!("{pos:?}");
             }
 
             rec.log(
@@ -357,30 +366,22 @@ fn main() -> Result<(), anyhow::Error> {
             )?;
         }
 
-        // need to rotate the quat for rerun
-        // TODO(lucasw) based on changing the wheel sizes it appears the width and length
-        // are swapped, or the quat rotation is wrong here
-        let rerun_quat = cquat_to_rerun(car_tfs.body.quat);
-
-        let rerun_pos =
-            rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
+        let car_pos = cvec3_to_glam(&car_tfs.body.pos);
+        let car_quat = cquat_to_glam(&car_tfs.body.quat);
         rec.log(
             "world/car0",
-            &rerun::Transform3D::from_translation_rotation(rerun_pos, rerun_quat),
+            &rerun::Transform3D::from_translation_rotation(car_pos, car_quat),
         )?;
 
-        // zero out the roll and pitch
-        let (_roll, _pitch, yaw) = rerun_quat.to_euler(glam::EulerRot::XYZ);
+        // zero out the roll and pitch for the chase camera
+        let (_roll, _pitch, yaw) = car_quat.to_euler(glam::EulerRot::XYZ);
         // lag the new yaw
         let lag_fr = 0.98;
         yaw_lagging = yaw_lagging * lag_fr + yaw * (1.0 - lag_fr);
-        let rerun_quat_yaw_only =
-            glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, yaw_lagging);
-        let rerun_pos =
-            rerun::Vec3D::from([car_tfs.body.pos.x, car_tfs.body.pos.y, car_tfs.body.pos.z]);
+        let car_quat_yaw_only = glam::Quat::from_euler(glam::EulerRot::XYZ, 0.0, 0.0, yaw_lagging);
         rec.log(
             "world/car",
-            &rerun::Transform3D::from_translation_rotation(rerun_pos, rerun_quat_yaw_only),
+            &rerun::Transform3D::from_translation_rotation(car_pos, car_quat_yaw_only),
         )?;
 
         rec.log(
@@ -394,7 +395,7 @@ fn main() -> Result<(), anyhow::Error> {
                 )],
             )
             // .with_fill_mode(rerun::FillMode::Solid)
-            .with_quaternions([rerun_quat]),
+            .with_quaternions([car_quat]),
         )?;
 
         let half_wheel_width = 0.15;
@@ -413,7 +414,7 @@ fn main() -> Result<(), anyhow::Error> {
                     [half_wheel_width * 2.0],
                     [wheel_radius],
                 )
-                .with_centers([glam::vec3(wheel_tf.pos.x, wheel_tf.pos.y, wheel_tf.pos.z)])
+                .with_centers([cvec3_to_glam(&wheel_tf.pos)])
                 .with_quaternions([rerun_quat]),
             )?;
             ind += 1;
