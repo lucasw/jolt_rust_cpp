@@ -1,15 +1,16 @@
-[package]
-name = "jolt_rust_cpp"
+[workspace]
+resolver = "2"
+members = [ "jolt_rust_cpp",
+]
+
+[workspace.package]
+publish = true
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
-anyhow = "1.0.99"
-cxx = "1.0.183"
-noise = "0.9.0"
-# TODO(lucasw) update to 0.25
-rerun = "0.24.1"
-
-[build-dependencies]
-cmake = "0.1.54"
-cxx-build = "1.0"
+license = "BSD-3"
+repository = "https://github.com/lucasw/tc_gbm_vehicle"
+authors = [
+    "Lucas Walter <wsacul@gmail.com>",
+]
+keywords = ["robotics", "simulation"]
+categories = ["science::robotics"]

@@ -5,7 +5,7 @@ fn main() {
     println!("cargo:rerun-if-changed=NULL");
 
     // let dst = cmake::build("JoltPhysics/Build");
-    let dst = cmake::Config::new("JoltPhysics/Build")
+    let dst = cmake::Config::new("../JoltPhysics/Build")
         // TODO(lucasw) still only works in debug mode
         // in release get undefined reference to `JPH::AssertFailed'
         // no matter which settings of JPH_ENABLE_ASSERTS used
@@ -59,7 +59,7 @@ fn main() {
 
     cxx_build::bridge("src/lib.rs")
         .file("src/misc.cpp")
-        .include("JoltPhysics")
+        .include("../JoltPhysics")
         // these need to sync with defaults in JoltPhysics cmake
         .define("JPH_DEBUG_RENDERER", Some("1"))
         .define("JPH_OBJECT_STREAM", Some("1"))
