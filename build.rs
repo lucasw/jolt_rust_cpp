@@ -15,7 +15,7 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", dst.display());
 
-    cxx_build::bridge("src/main.rs")
+    cxx_build::bridge("src/lib.rs")
         .file("src/misc.cpp")
         .include("JoltPhysics")
         // these need to sync with defaults in JoltPhysics cmake
