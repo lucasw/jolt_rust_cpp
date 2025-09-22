@@ -78,7 +78,7 @@ fn setup_sim(world: &mut World) {
     let perlin = Perlin::new(1);
 
     let cell_size = 1.0;
-    let (terrain, vertices, triangles, colors) = make_terrain(cell_size, perlin);
+    let (terrain, _vertices, _triangles, _colors) = make_terrain(cell_size, perlin);
 
     let vehicle_half_size = ffi::CVec3 {
         x: 3.0,
@@ -157,17 +157,29 @@ fn setup(
     let ground_height = 0.1;
 
     let ground = commands.spawn((
-        Mesh3d(mesh_assets.add(Plane3d::default().mesh().size(ground_size, ground_size))),
+        Mesh3d(
+            mesh_assets.add(
+                Plane3d::new(
+                    Vec3::new(0.0, 0.0, 1.0),
+                    Vec2::new(ground_size, ground_size),
+                )
+                .mesh(),
+            ),
+        ),
         MeshMaterial3d(material_assets.add(StandardMaterial {
             // TODO(lucasw) add uv coordinates to make this repeat
             base_color_texture: Some(images.add(uv_debug_texture())),
             ..default()
         })),
-        Transform::from_xyz(0.0, -ground_height, 0.0),
+        Transform::from_xyz(0.0, 0.0, -ground_height),
     ));
     println!("spawned ground: {}", ground.id());
 
-    let _camera = commands.spawn((Camera3d::default(), UserCamera));
+    let _camera = commands.spawn((
+        Camera3d::default(),
+        UserCamera,
+        Transform::from_xyz(0.0, 0.0, 4.0).looking_at(Vec3::new(2.0, 0.0, 3.0), Vec3::Z),
+    ));
 
     commands.spawn((
         DirectionalLight {
@@ -223,7 +235,7 @@ fn user_camera_update(
     let up = camera_transform.up();
     let down = camera_transform.down();
 
-    let dx = 0.00125;
+    let dx = 0.00525;
     let mut changed = false;
     if key_input.pressed(KeyCode::KeyW) {
         camera_transform.translation += forward * dx;
@@ -251,13 +263,13 @@ fn user_camera_update(
         camera_transform.translation += down * dx * 0.8;
         changed = true;
     }
-    let rot = 0.004;
+    let rot = 0.012;
     if key_input.pressed(KeyCode::ArrowLeft) {
-        camera_transform.rotate_y(rot);
+        camera_transform.rotate_z(rot * 2.0);
         changed = true;
     }
     if key_input.pressed(KeyCode::ArrowRight) {
-        camera_transform.rotate_y(-rot * 3.0);
+        camera_transform.rotate_z(-rot * 2.0);
         changed = true;
     }
 
@@ -276,7 +288,7 @@ fn user_camera_update(
 }
 
 fn sim_update(world: &mut World) {
-    let mut sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
+    let sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
         .get_non_send_resource_mut::<cxx::UniquePtr<SimSystem>>()
         .unwrap();
     println!("update sim system");
