@@ -29,6 +29,8 @@ pub mod ffi {
         quat: CQuat,
     }
 
+    // TODO(lucasw) store the car chassis and wheel dimensions in this also, or in a separate
+    // struct?
     #[derive(Clone)]
     struct CarTfs {
         body: CTf,

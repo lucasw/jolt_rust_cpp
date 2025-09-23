@@ -38,7 +38,11 @@ pub struct Sim {
 struct UserCamera;
 
 #[derive(Component)]
-struct Vehicle;
+struct VehicleTransform;
+
+// TODO(lucasw) bundle all the transforms together?
+#[derive(Component)]
+struct WheelTransform;
 
 #[derive(Resource)]
 struct Config {
@@ -47,11 +51,19 @@ struct Config {
 
 /// This will receive asynchronously any data sent from the render world
 #[derive(Resource, Deref)]
-struct VehicleReceiver(Receiver<ffi::CTf>);
+struct VehicleControlsReceiver(Receiver<ffi::CControls>);
 
 /// This will send asynchronously any data to the main world
 #[derive(Resource, Deref)]
-struct VehicleSender(Sender<ffi::CTf>);
+struct VehicleControlsSender(Sender<ffi::CControls>);
+
+/// This will receive asynchronously any data sent from the render world
+#[derive(Resource, Deref)]
+struct VehicleTransformReceiver(Receiver<ffi::CarTfs>);
+
+/// This will send asynchronously any data to the main world
+#[derive(Resource, Deref)]
+struct VehicleTransformSender(Sender<ffi::CarTfs>);
 
 /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
@@ -108,8 +120,11 @@ fn sim_setup(
     world.insert_non_send_resource(sim_system);
 
     let (sender, receiver) = crossbeam_channel::unbounded();
-    world.insert_resource(VehicleSender(sender));
-    world.insert_resource(VehicleReceiver(receiver));
+    world.insert_resource(VehicleTransformSender(sender));
+    world.insert_resource(VehicleTransformReceiver(receiver));
+    let (sender, receiver) = crossbeam_channel::unbounded();
+    world.insert_resource(VehicleControlsSender(sender));
+    world.insert_resource(VehicleControlsReceiver(receiver));
 
     println!("setup simulation done");
 }
@@ -188,7 +203,7 @@ fn setup(
             base_color_texture: Some(images.add(uv_debug_texture())),
             ..default()
         })),
-        Transform::from_xyz(0.0, 0.0, -ground_height),
+        Transform::from_xyz(0.0, 0.0, -5.0),
     ));
     println!("spawned ground: {}", ground.id());
 
@@ -230,7 +245,50 @@ fn setup(
             base_color_texture: Some(images.add(uv_debug_texture())),
             ..default()
         })),
-        Vehicle,
+        VehicleTransform,
+    ));
+
+    // TODO(lucasw) need to handle wheels in aggregate
+    let wheel_radius = 0.3;
+    let wheel_half_height = 0.3;
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cylinder::new(wheel_radius, wheel_half_height))),
+        MeshMaterial3d(material_assets.add(StandardMaterial {
+            // TODO(lucasw) add uv coordinates to make this repeat
+            base_color_texture: Some(images.add(uv_debug_texture())),
+            ..default()
+        })),
+        WheelTransform,
+    ));
+
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cylinder::new(wheel_radius, wheel_half_height))),
+        MeshMaterial3d(material_assets.add(StandardMaterial {
+            // TODO(lucasw) add uv coordinates to make this repeat
+            base_color_texture: Some(images.add(uv_debug_texture())),
+            ..default()
+        })),
+        WheelTransform,
+    ));
+
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cylinder::new(wheel_radius, wheel_half_height))),
+        MeshMaterial3d(material_assets.add(StandardMaterial {
+            // TODO(lucasw) add uv coordinates to make this repeat
+            base_color_texture: Some(images.add(uv_debug_texture())),
+            ..default()
+        })),
+        WheelTransform,
+    ));
+
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cylinder::new(wheel_radius, wheel_half_height))),
+        MeshMaterial3d(material_assets.add(StandardMaterial {
+            // TODO(lucasw) add uv coordinates to make this repeat
+            base_color_texture: Some(images.add(uv_debug_texture())),
+            ..default()
+        })),
+        WheelTransform,
     ));
 }
 
@@ -315,7 +373,43 @@ fn user_camera_update(
     }
 
     if changed {
-        println!("{:?}", camera_transform.translation);
+        debug!("{:?}", camera_transform.translation);
+    }
+}
+
+fn vehicle_control_update(
+    key_input: Res<ButtonInput<KeyCode>>,
+    sender: Res<VehicleControlsSender>,
+) {
+    let mut controls = ffi::CControls {
+        forward: 0.0,
+        right: 0.0,
+    };
+    let mut changed = false;
+    if key_input.pressed(KeyCode::KeyI) {
+        controls.forward = 0.06;
+        // control.forward += 0.01;
+        changed = true;
+    }
+    if key_input.pressed(KeyCode::KeyK) {
+        controls.forward = -0.04;
+        // control.forward += 0.01;
+        changed = true;
+    }
+    if key_input.pressed(KeyCode::KeyL) {
+        controls.right = 0.4;
+        // control.forward += 0.01;
+        changed = true;
+    }
+    if key_input.pressed(KeyCode::KeyJ) {
+        controls.right = -0.4;
+        // control.forward += 0.01;
+        changed = true;
+    }
+
+    // TODO(lucasw) keep track of last sent controls somewhere and blend the new ones with them
+    if changed {
+        let _ = sender.send(controls);
     }
 }
 
@@ -328,32 +422,56 @@ fn cquat_to_bevy(q: &ffi::CQuat) -> Quat {
 }
 
 fn sim_update(world: &mut World) {
-    let sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
-        .get_non_send_resource_mut::<cxx::UniquePtr<SimSystem>>()
-        .unwrap();
     // println!("update sim system");
 
     // TODO(lucasw) add another crossbeam sender receiver pair to communicate vehicle inputs
     // from the keyboard
-    let control = ffi::CControls {
-        forward: 0.052,
-        right: 0.1,
+    let mut controls = ffi::CControls {
+        forward: 0.0,
+        right: 0.0,
     };
-    let car_tfs = sim_system.as_mut().unwrap().update(control);
+    let receiver = &mut world.get_resource_mut::<VehicleControlsReceiver>().unwrap();
+    while let Ok(new_controls) = receiver.try_recv() {
+        controls = new_controls;
+    }
+    let car_tfs = {
+        let sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
+            .get_non_send_resource_mut::<cxx::UniquePtr<SimSystem>>()
+            .unwrap();
+        sim_system.as_mut().unwrap().update(controls)
+    };
+
     // println!("{:?}", car_tfs.body.pos);
     // TODO(lucasw) use a crossbeam sender to send the vehicle position to an
     // update that can access the vehicle transform
-    let mut sender = &mut world.get_resource_mut::<VehicleSender>().unwrap();
-    let _ = sender.send(car_tfs.body);
+    let sender = &mut world.get_resource_mut::<VehicleTransformSender>().unwrap();
+    let _ = sender.send(car_tfs);
 }
 
-fn vehicle_update(
-    receiver: Res<VehicleReceiver>,
-    mut vehicle_transform: Single<&mut Transform, With<Vehicle>>,
+fn vehicle_viz_update(
+    receiver: Res<VehicleTransformReceiver>,
+    mut vehicle_transform: Single<
+        &mut Transform,
+        (With<VehicleTransform>, Without<WheelTransform>),
+    >,
+    mut wheel_transforms: Query<&mut Transform, (With<WheelTransform>, Without<VehicleTransform>)>,
 ) {
-    while let Ok(vehicle_tf) = receiver.try_recv() {
-        vehicle_transform.translation = cvec3_to_bevy(&vehicle_tf.pos);
-        vehicle_transform.rotation = cquat_to_bevy(&vehicle_tf.quat);
+    while let Ok(car_tfs) = receiver.try_recv() {
+        vehicle_transform.translation = cvec3_to_bevy(&car_tfs.body.pos);
+        vehicle_transform.rotation = cquat_to_bevy(&car_tfs.body.quat);
+
+        let wheels_ctf = [
+            car_tfs.wheel_fl,
+            car_tfs.wheel_fr,
+            car_tfs.wheel_bl,
+            car_tfs.wheel_br,
+        ];
+        for (ind, (wheel_ctf, mut wheel)) in
+            std::iter::zip(wheels_ctf.iter(), &mut wheel_transforms).enumerate()
+        {
+            wheel.translation = cvec3_to_bevy(&wheel_ctf.pos);
+            wheel.rotation = cquat_to_bevy(&wheel_ctf.quat);
+        }
     }
 }
 
@@ -378,7 +496,15 @@ fn main() -> Result<(), anyhow::Error> {
             vehicle_half_size: Vec3::new(3.0, 1.0, 0.5),
         })
         .add_systems(Startup, (setup, sim_setup))
-        .add_systems(Update, (user_camera_update, sim_update, vehicle_update))
+        .add_systems(
+            Update,
+            (
+                user_camera_update,
+                vehicle_control_update,
+                sim_update,
+                vehicle_viz_update,
+            ),
+        )
         .run();
 
     Ok(())
