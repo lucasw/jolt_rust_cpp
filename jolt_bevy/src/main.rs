@@ -11,8 +11,10 @@ use bevy::{
     render::{
         Render, RenderSet,
         camera::RenderTarget,
+        mesh::{Indices, VertexAttributeValues},
         render_asset::RenderAssetUsages,
         render_resource::CommandEncoder,
+        render_resource::PrimitiveTopology,
         render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
     },
     window::{PresentMode, WindowResolution},
@@ -48,6 +50,9 @@ struct WheelTransform;
 
 #[derive(Resource)]
 struct Config {
+    terrain: ffi::CTerrain,
+    vertices: Vec<[f64; 3]>,
+    triangles: Vec<[u32; 3]>,
     vehicle_half_size: Vec3,
 }
 
@@ -96,20 +101,8 @@ fn uv_debug_texture() -> Image {
     )
 }
 
-fn sim_setup(
-    world: &mut World,
-    /*
-    mut commands: Commands,
-    mut mesh_assets: ResMut<Assets<Mesh>>,
-    mut images: ResMut<Assets<Image>>,
-    mut material_assets: ResMut<Assets<StandardMaterial>>,
-    */
-) {
+fn sim_setup(world: &mut World) {
     println!("setup simulation");
-    let perlin = Perlin::new(1);
-
-    let cell_size = 1.0;
-    let (terrain, _vertices, _triangles, _colors) = make_terrain(cell_size, perlin);
 
     let config = world.get_resource::<Config>().unwrap();
 
@@ -118,7 +111,7 @@ fn sim_setup(
         y: config.vehicle_half_size.y,
         z: config.vehicle_half_size.z,
     };
-    let sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
+    let sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), config.terrain.clone());
     world.insert_non_send_resource(sim_system);
 
     let (sender, receiver) = crossbeam_channel::unbounded();
@@ -187,27 +180,71 @@ fn setup(
     ));
     */
 
-    let ground_size = 1200.0;
-    let ground_height = 0.1;
+    if false {
+        let ground_size = 1200.0;
+        let ground_height = 0.1;
 
-    let ground = commands.spawn((
-        Mesh3d(
-            mesh_assets.add(
-                Plane3d::new(
-                    Vec3::new(0.0, 0.0, 1.0),
-                    Vec2::new(ground_size, ground_size),
-                )
-                .mesh(),
+        let ground = commands.spawn((
+            Mesh3d(
+                mesh_assets.add(
+                    Plane3d::new(
+                        Vec3::new(0.0, 0.0, 1.0),
+                        Vec2::new(ground_size, ground_size),
+                    )
+                    .mesh(),
+                ),
             ),
-        ),
-        MeshMaterial3d(material_assets.add(StandardMaterial {
-            // TODO(lucasw) add uv coordinates to make this repeat
-            base_color_texture: Some(images.add(uv_debug_texture())),
-            ..default()
-        })),
-        Transform::from_xyz(0.0, 0.0, -5.0),
-    ));
-    println!("spawned ground: {}", ground.id());
+            MeshMaterial3d(material_assets.add(StandardMaterial {
+                // TODO(lucasw) add uv coordinates to make this repeat
+                base_color_texture: Some(images.add(uv_debug_texture())),
+                ..default()
+            })),
+            Transform::from_xyz(0.0, 0.0, -5.0),
+        ));
+        println!("spawned ground: {}", ground.id());
+    }
+
+    // mesh for terrain
+    {
+        // need f32 for vertices
+        // TODO(lucasw) nested map?
+        // let vertices_f32: Vec<[f32; 3]> = config.vertices.into_iter().map(|x| x as f32).collect();
+        let mut vertices = Vec::new();
+        for vertex in &config.vertices {
+            // need arraytools for [f64;4] mapping
+            vertices.push([vertex[0] as f32, vertex[1] as f32, vertex[2] as f32]);
+        }
+
+        // the triangles are just one long list, not a vector of 3 indices arrays
+        let mut indices_flat = Vec::new();
+        let mut normals = Vec::new();
+        for tri in &config.triangles {
+            for tri_ind in tri {
+                indices_flat.push(*tri_ind);
+            }
+            // TODO(lucasw) calculate better normals but straight up looks decent
+            normals.push([0.0, 0.0, 1.0]);
+        }
+        commands.spawn((
+            Mesh3d(
+                mesh_assets.add(
+                    Mesh::new(
+                        PrimitiveTopology::TriangleList,
+                        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+                    )
+                    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices)
+                    .with_inserted_indices(Indices::U32(indices_flat))
+                    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals),
+                ),
+            ),
+            MeshMaterial3d(material_assets.add(StandardMaterial {
+                // TODO(lucasw) add uv coordinates to make this repeat
+                base_color_texture: Some(images.add(uv_debug_texture())),
+                ..default()
+            })),
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ));
+    }
 
     let _camera = commands.spawn((
         Camera3d::default(),
@@ -489,6 +526,16 @@ fn vehicle_viz_update(
 fn main() -> Result<(), anyhow::Error> {
     println!("jolt_bevy");
 
+    let perlin = Perlin::new(1);
+    let cell_size = 2.0;
+    let (terrain, vertices, triangles, _colors) = make_terrain(cell_size, perlin);
+    let config = Config {
+        terrain,
+        vertices,
+        triangles,
+        vehicle_half_size: Vec3::new(3.0, 1.0, 0.5),
+    };
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
@@ -503,10 +550,8 @@ fn main() -> Result<(), anyhow::Error> {
             // FrameTimeDiagnosticsPlugin,
             // LogDiagnosticsPlugin::default(),
         ))
-        .insert_resource(Config {
-            vehicle_half_size: Vec3::new(3.0, 1.0, 0.5),
-        })
-        .add_systems(Startup, (setup, sim_setup))
+        .insert_resource(config)
+        .add_systems(Startup, (sim_setup, setup))
         .add_systems(
             Update,
             (
