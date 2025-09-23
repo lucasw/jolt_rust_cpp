@@ -17,6 +17,7 @@ use bevy::{
     },
     window::{PresentMode, WindowResolution},
 };
+use crossbeam_channel::{Receiver, Sender};
 
 use ffi::SimSystem;
 // use cxx::UniquePtr;
@@ -36,13 +37,21 @@ pub struct Sim {
 #[derive(Component)]
 struct UserCamera;
 
-/*
-fn gizmo_setup(mut config_store: ResMut<GizmoConfigStore>) {
-    let (config, _) = config_store.config_mut::<DefaultGizmoConfigGroup>();
-    config.line_width = 12.0;
-    config.line_perspective = false;
+#[derive(Component)]
+struct Vehicle;
+
+#[derive(Resource)]
+struct Config {
+    vehicle_half_size: Vec3,
 }
-*/
+
+/// This will receive asynchronously any data sent from the render world
+#[derive(Resource, Deref)]
+struct VehicleReceiver(Receiver<ffi::CTf>);
+
+/// This will send asynchronously any data to the main world
+#[derive(Resource, Deref)]
+struct VehicleSender(Sender<ffi::CTf>);
 
 /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
@@ -73,30 +82,35 @@ fn uv_debug_texture() -> Image {
     )
 }
 
-fn setup_sim(world: &mut World) {
+fn sim_setup(
+    world: &mut World,
+    /*
+    mut commands: Commands,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
+    mut material_assets: ResMut<Assets<StandardMaterial>>,
+    */
+) {
     println!("setup simulation");
     let perlin = Perlin::new(1);
 
     let cell_size = 1.0;
     let (terrain, _vertices, _triangles, _colors) = make_terrain(cell_size, perlin);
 
+    let config = world.get_resource::<Config>().unwrap();
+
     let vehicle_half_size = ffi::CVec3 {
-        x: 3.0,
-        y: 2.0,
-        z: 0.8,
+        x: config.vehicle_half_size.x,
+        y: config.vehicle_half_size.y,
+        z: config.vehicle_half_size.z,
     };
-    // let sim_system: bevy::prelude::NonSend<'_, cxx::UniquePtr<SimSystem>> = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
     let sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
-    /*
-    let sim = Sim {
-        throttle: 0.0,
-        brake: 0.0,
-        steering: 0.0,
-        // sim_system: bevy::prelude::NonSend::<'static, SimSystem>(sim_system),
-        sim_system,
-    };
-    */
     world.insert_non_send_resource(sim_system);
+
+    let (sender, receiver) = crossbeam_channel::unbounded();
+    world.insert_resource(VehicleSender(sender));
+    world.insert_resource(VehicleReceiver(receiver));
+
     println!("setup simulation done");
 }
 
@@ -105,6 +119,7 @@ fn setup(
     mesh_assets: ResMut<Assets<Mesh>>,
     material_assets: ResMut<Assets<StandardMaterial>>,
     images: ResMut<Assets<Image>>,
+    config: Res<Config>,
 ) {
     let mesh_assets = mesh_assets.into_inner();
     let material_assets = material_assets.into_inner();
@@ -131,6 +146,7 @@ fn setup(
     let image_handle = images.add(image);
     println!("{image_handle:?}");
 
+    /*
     commands.spawn((
         Camera3d::default(),
         Camera {
@@ -138,9 +154,10 @@ fn setup(
             clear_color: Color::WHITE.into(),
             ..default()
         },
-        Transform::from_xyz(0.0, 0.0, 0.0).looking_at(Vec3::new(0.0, 0.0, -1.0), Vec3::Y),
+        Transform::from_xyz(-10.0, 0.0, 5.0).looking_at(Vec3::new(-5.0, 0.0, 3.0), Vec3::Y),
         // RenderCamera,
     ));
+    */
 
     /*
     let _ground = commands.spawn((
@@ -178,27 +195,42 @@ fn setup(
     let _camera = commands.spawn((
         Camera3d::default(),
         UserCamera,
-        Transform::from_xyz(0.0, 0.0, 4.0).looking_at(Vec3::new(2.0, 0.0, 3.0), Vec3::Z),
+        Transform::from_xyz(-10.0, 0.0, 5.0).looking_at(Vec3::new(-5.0, 0.0, 3.0), Vec3::Z),
     ));
 
     commands.spawn((
         DirectionalLight {
-            illuminance: 15.0,
+            illuminance: 0.01,
             shadows_enabled: true,
             ..default()
         },
-        Transform::IDENTITY.looking_at(Vec3::new(0.25, -1.0, -1.0), Vec3::Y),
+        Transform::IDENTITY.looking_at(Vec3::new(0.25, 0.1, -1.0), Vec3::Y),
     ));
 
     // Some light to see something
     commands.spawn((
         PointLight {
-            intensity: 45_000_000.,
+            intensity: 225_000_000.,
             range: 500.,
             shadows_enabled: true,
             ..default()
         },
         Transform::from_xyz(100., 82., 40.),
+    ));
+
+    // vehicle
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cuboid::new(
+            config.vehicle_half_size.x * 2.0,
+            config.vehicle_half_size.y * 2.0,
+            config.vehicle_half_size.z * 2.0,
+        ))),
+        MeshMaterial3d(material_assets.add(StandardMaterial {
+            // TODO(lucasw) add uv coordinates to make this repeat
+            base_color_texture: Some(images.add(uv_debug_texture())),
+            ..default()
+        })),
+        Vehicle,
     ));
 }
 
@@ -235,7 +267,7 @@ fn user_camera_update(
     let up = camera_transform.up();
     let down = camera_transform.down();
 
-    let dx = 0.00525;
+    let dx = 0.02525;
     let mut changed = false;
     if key_input.pressed(KeyCode::KeyW) {
         camera_transform.translation += forward * dx;
@@ -287,18 +319,42 @@ fn user_camera_update(
     }
 }
 
+fn cvec3_to_bevy(pos: &ffi::CVec3) -> Vec3 {
+    Vec3::new(pos.x, pos.y, pos.z)
+}
+
+fn cquat_to_bevy(q: &ffi::CQuat) -> Quat {
+    Quat::from_xyzw(q.x, q.y, q.z, q.w)
+}
+
 fn sim_update(world: &mut World) {
     let sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
         .get_non_send_resource_mut::<cxx::UniquePtr<SimSystem>>()
         .unwrap();
-    println!("update sim system");
+    // println!("update sim system");
 
+    // TODO(lucasw) add another crossbeam sender receiver pair to communicate vehicle inputs
+    // from the keyboard
     let control = ffi::CControls {
         forward: 0.052,
         right: 0.1,
     };
     let car_tfs = sim_system.as_mut().unwrap().update(control);
-    println!("{:?}", car_tfs.body.pos);
+    // println!("{:?}", car_tfs.body.pos);
+    // TODO(lucasw) use a crossbeam sender to send the vehicle position to an
+    // update that can access the vehicle transform
+    let mut sender = &mut world.get_resource_mut::<VehicleSender>().unwrap();
+    let _ = sender.send(car_tfs.body);
+}
+
+fn vehicle_update(
+    receiver: Res<VehicleReceiver>,
+    mut vehicle_transform: Single<&mut Transform, With<Vehicle>>,
+) {
+    while let Ok(vehicle_tf) = receiver.try_recv() {
+        vehicle_transform.translation = cvec3_to_bevy(&vehicle_tf.pos);
+        vehicle_transform.rotation = cquat_to_bevy(&vehicle_tf.quat);
+    }
 }
 
 fn main() -> Result<(), anyhow::Error> {
@@ -318,9 +374,11 @@ fn main() -> Result<(), anyhow::Error> {
             // FrameTimeDiagnosticsPlugin,
             // LogDiagnosticsPlugin::default(),
         ))
-        .add_systems(Startup, (setup, setup_sim))
-        .add_systems(Update, (user_camera_update, sim_update))
-        // .add_systems(Render, camera_update.after(RenderSet::Render))
+        .insert_resource(Config {
+            vehicle_half_size: Vec3::new(3.0, 1.0, 0.5),
+        })
+        .add_systems(Startup, (setup, sim_setup))
+        .add_systems(Update, (user_camera_update, sim_update, vehicle_update))
         .run();
 
     Ok(())

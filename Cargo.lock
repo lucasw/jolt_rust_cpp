@@ -5679,6 +5679,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
+ "crossbeam-channel",
  "cxx",
  "glam 0.30.7",
  "jolt_rust_cpp",
