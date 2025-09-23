@@ -161,21 +161,24 @@ fn viz_setup(
 
     // draw a bunch of sphere for the point cloud
     {
+        let sphere = Sphere::new(0.1).mesh().ico(3).unwrap();
+        let material = StandardMaterial {
+            // Alpha channel of the color controls transparency.
+            // We set it to 0.0 here, because it will be changed over time in the
+            // `fade_transparency` function.
+            // Note that the transparency has no effect on the objects shadow.
+            base_color: Color::srgba(0.2, 0.7, 0.1, 1.0),
+            // Mask sets a cutoff for transparency. Alpha values below are fully transparent,
+            // alpha values above are fully opaque.
+            alpha_mode: AlphaMode::Mask(0.5),
+            ..default()
+        };
         let (rays, _) = jolt_rust_cpp::make_ray_casts();
         for _ind in 0..rays.num_rays {
             commands.spawn((
-                Mesh3d(mesh_assets.add(Sphere::new(0.1).mesh().ico(3).unwrap())),
-                MeshMaterial3d(material_assets.add(StandardMaterial {
-                    // Alpha channel of the color controls transparency.
-                    // We set it to 0.0 here, because it will be changed over time in the
-                    // `fade_transparency` function.
-                    // Note that the transparency has no effect on the objects shadow.
-                    base_color: Color::srgba(0.2, 0.7, 0.1, 1.0),
-                    // Mask sets a cutoff for transparency. Alpha values below are fully transparent,
-                    // alpha values above are fully opaque.
-                    alpha_mode: AlphaMode::Mask(0.5),
-                    ..default()
-                })),
+                // TODO(lucasw) instead of clone can I instance a bunch of spheres?
+                Mesh3d(mesh_assets.add(sphere.clone())),
+                MeshMaterial3d(material_assets.add(material.clone())),
                 Transform::from_xyz(0.0, 0.0, 0.0),
                 PointCloud,
             ));
