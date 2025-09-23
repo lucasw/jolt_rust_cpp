@@ -35,7 +35,9 @@ pub struct Sim {
 */
 
 #[derive(Component)]
-struct UserCamera;
+struct UserCamera {
+    relative_transform: Transform,
+}
 
 #[derive(Component)]
 struct VehicleTransform;
@@ -209,8 +211,11 @@ fn setup(
 
     let _camera = commands.spawn((
         Camera3d::default(),
-        UserCamera,
-        Transform::from_xyz(-10.0, 0.0, 5.0).looking_at(Vec3::new(-5.0, 0.0, 3.0), Vec3::Z),
+        UserCamera {
+            relative_transform: Transform::from_xyz(-10.0, 0.0, 5.0)
+                .looking_at(Vec3::new(-5.0, 0.0, 3.0), Vec3::Z),
+        },
+        Transform::default(),
     ));
 
     commands.spawn((
@@ -316,8 +321,12 @@ fn camera_update(camera: Single<&Camera, With<RenderCamera>>, images: Res<Assets
 
 fn user_camera_update(
     key_input: Res<ButtonInput<KeyCode>>,
-    mut camera_transform: Single<&mut Transform, With<UserCamera>>,
+    mut user_camera: Single<&mut UserCamera>,
+    mut camera_global_transform: Single<&mut Transform, With<UserCamera>>,
+    // vehicle_transform: Single<Transform, With<VehicleTransform>>,
+    vehicle_transform: Single<&Transform, (With<VehicleTransform>, Without<UserCamera>)>,
 ) {
+    let camera_transform = &mut user_camera.relative_transform;
     let forward = camera_transform.forward();
     let back = camera_transform.back();
     let left = camera_transform.left();
@@ -375,6 +384,10 @@ fn user_camera_update(
     if changed {
         debug!("{:?}", camera_transform.translation);
     }
+
+    camera_global_transform.translation =
+        vehicle_transform.translation + camera_transform.translation;
+    camera_global_transform.rotation = camera_transform.rotation;
 }
 
 fn vehicle_control_update(
@@ -466,9 +479,7 @@ fn vehicle_viz_update(
             car_tfs.wheel_bl,
             car_tfs.wheel_br,
         ];
-        for (ind, (wheel_ctf, mut wheel)) in
-            std::iter::zip(wheels_ctf.iter(), &mut wheel_transforms).enumerate()
-        {
+        for (wheel_ctf, mut wheel) in std::iter::zip(wheels_ctf.iter(), &mut wheel_transforms) {
             wheel.translation = cvec3_to_bevy(&wheel_ctf.pos);
             wheel.rotation = cquat_to_bevy(&wheel_ctf.quat);
         }
