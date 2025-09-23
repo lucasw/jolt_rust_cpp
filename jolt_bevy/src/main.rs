@@ -42,7 +42,10 @@ struct UserCamera {
 }
 
 #[derive(Component)]
-struct VehicleTransform;
+struct PointCloud;
+
+#[derive(Component)]
+struct VehicleData;
 
 // TODO(lucasw) bundle all the transforms together?
 #[derive(Component)]
@@ -66,11 +69,11 @@ struct VehicleControlsSender(Sender<ffi::CControls>);
 
 /// This will receive asynchronously any data sent from the render world
 #[derive(Resource, Deref)]
-struct VehicleTransformReceiver(Receiver<ffi::CarTfs>);
+struct VehicleDataReceiver(Receiver<(ffi::CarTfs, ffi::CRayCastConfig)>);
 
 /// This will send asynchronously any data to the main world
 #[derive(Resource, Deref)]
-struct VehicleTransformSender(Sender<ffi::CarTfs>);
+struct VehicleDataSender(Sender<(ffi::CarTfs, ffi::CRayCastConfig)>);
 
 /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
@@ -115,8 +118,8 @@ fn sim_setup(world: &mut World) {
     world.insert_non_send_resource(sim_system);
 
     let (sender, receiver) = crossbeam_channel::unbounded();
-    world.insert_resource(VehicleTransformSender(sender));
-    world.insert_resource(VehicleTransformReceiver(receiver));
+    world.insert_resource(VehicleDataSender(sender));
+    world.insert_resource(VehicleDataReceiver(receiver));
     let (sender, receiver) = crossbeam_channel::unbounded();
     world.insert_resource(VehicleControlsSender(sender));
     world.insert_resource(VehicleControlsReceiver(receiver));
@@ -124,7 +127,7 @@ fn sim_setup(world: &mut World) {
     println!("setup simulation done");
 }
 
-fn setup(
+fn viz_setup(
     mut commands: Commands,
     mesh_assets: ResMut<Assets<Mesh>>,
     material_assets: ResMut<Assets<StandardMaterial>>,
@@ -156,6 +159,28 @@ fn setup(
     let image_handle = images.add(image);
     println!("{image_handle:?}");
 
+    // draw a bunch of sphere for the point cloud
+    {
+        let (rays, _) = jolt_rust_cpp::make_ray_casts();
+        for _ind in 0..rays.num_rays {
+            commands.spawn((
+                Mesh3d(mesh_assets.add(Sphere::new(0.1).mesh().ico(3).unwrap())),
+                MeshMaterial3d(material_assets.add(StandardMaterial {
+                    // Alpha channel of the color controls transparency.
+                    // We set it to 0.0 here, because it will be changed over time in the
+                    // `fade_transparency` function.
+                    // Note that the transparency has no effect on the objects shadow.
+                    base_color: Color::srgba(0.2, 0.7, 0.1, 1.0),
+                    // Mask sets a cutoff for transparency. Alpha values below are fully transparent,
+                    // alpha values above are fully opaque.
+                    alpha_mode: AlphaMode::Mask(0.5),
+                    ..default()
+                })),
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                PointCloud,
+            ));
+        }
+    }
     /*
     commands.spawn((
         Camera3d::default(),
@@ -287,7 +312,7 @@ fn setup(
             base_color_texture: Some(images.add(uv_debug_texture())),
             ..default()
         })),
-        VehicleTransform,
+        VehicleData,
     ));
 
     // TODO(lucasw) need to handle wheels in aggregate
@@ -360,8 +385,8 @@ fn user_camera_update(
     key_input: Res<ButtonInput<KeyCode>>,
     mut user_camera: Single<&mut UserCamera>,
     mut camera_global_transform: Single<&mut Transform, With<UserCamera>>,
-    // vehicle_transform: Single<Transform, With<VehicleTransform>>,
-    vehicle_transform: Single<&Transform, (With<VehicleTransform>, Without<UserCamera>)>,
+    // vehicle_transform: Single<Transform, With<VehicleData>>,
+    vehicle_transform: Single<&Transform, (With<VehicleData>, Without<UserCamera>)>,
 ) {
     let camera_transform = &mut user_camera.relative_transform;
     let forward = camera_transform.forward();
@@ -484,29 +509,52 @@ fn sim_update(world: &mut World) {
     while let Ok(new_controls) = receiver.try_recv() {
         controls = new_controls;
     }
-    let car_tfs = {
+    let (car_tfs, ray_results) = {
         let sim_system: &mut cxx::UniquePtr<SimSystem> = &mut world
             .get_non_send_resource_mut::<cxx::UniquePtr<SimSystem>>()
             .unwrap();
-        sim_system.as_mut().unwrap().update(controls)
+        let car_tfs = sim_system.as_mut().unwrap().update(controls);
+
+        // TODO(lucasw) do this once and store it somewhere
+        let (ray_cast_config, _ray_cast_line_strips) = jolt_rust_cpp::make_ray_casts();
+        let car_ray_cast_config = jolt_rust_cpp::transform_ray_cast_config(
+            &ray_cast_config,
+            &car_tfs.body.pos,
+            &car_tfs.body.quat,
+        );
+
+        let ray_results = sim_system.as_mut().unwrap().get_rays(car_ray_cast_config);
+        (car_tfs, ray_results)
     };
 
     // println!("{:?}", car_tfs.body.pos);
     // TODO(lucasw) use a crossbeam sender to send the vehicle position to an
     // update that can access the vehicle transform
-    let sender = &mut world.get_resource_mut::<VehicleTransformSender>().unwrap();
-    let _ = sender.send(car_tfs);
+    let sender = &mut world.get_resource_mut::<VehicleDataSender>().unwrap();
+    let _ = sender.send((car_tfs, ray_results));
 }
 
 fn vehicle_viz_update(
-    receiver: Res<VehicleTransformReceiver>,
-    mut vehicle_transform: Single<
+    receiver: Res<VehicleDataReceiver>,
+    mut vehicle_transform: Single<&mut Transform, (With<VehicleData>, Without<WheelTransform>)>,
+    mut wheel_transforms: Query<
         &mut Transform,
-        (With<VehicleTransform>, Without<WheelTransform>),
+        (
+            With<WheelTransform>,
+            Without<VehicleData>,
+            Without<PointCloud>,
+        ),
     >,
-    mut wheel_transforms: Query<&mut Transform, (With<WheelTransform>, Without<VehicleTransform>)>,
+    mut point_transforms: Query<
+        &mut Transform,
+        (
+            With<PointCloud>,
+            Without<VehicleData>,
+            Without<WheelTransform>,
+        ),
+    >,
 ) {
-    while let Ok(car_tfs) = receiver.try_recv() {
+    while let Ok((car_tfs, ray_results)) = receiver.try_recv() {
         vehicle_transform.translation = cvec3_to_bevy(&car_tfs.body.pos);
         vehicle_transform.rotation = cquat_to_bevy(&car_tfs.body.quat);
 
@@ -519,6 +567,13 @@ fn vehicle_viz_update(
         for (wheel_ctf, mut wheel) in std::iter::zip(wheels_ctf.iter(), &mut wheel_transforms) {
             wheel.translation = cvec3_to_bevy(&wheel_ctf.pos);
             wheel.rotation = cquat_to_bevy(&wheel_ctf.quat);
+        }
+
+        // Not sure how efficient this is
+        for (ray_point, mut point_transform) in
+            std::iter::zip(ray_results.directions, &mut point_transforms)
+        {
+            point_transform.translation = cvec3_to_bevy(&ray_point);
         }
     }
 }
@@ -551,7 +606,7 @@ fn main() -> Result<(), anyhow::Error> {
             // LogDiagnosticsPlugin::default(),
         ))
         .insert_resource(config)
-        .add_systems(Startup, (sim_setup, setup))
+        .add_systems(Startup, (sim_setup, viz_setup))
         .add_systems(
             Update,
             (

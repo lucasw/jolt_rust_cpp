@@ -211,7 +211,7 @@ pub fn make_ray_casts() -> (ffi::CRayCastConfig, Vec<[[f32; 3]; 2]>) {
             ind += 1;
         }
     }
-    println!("ray {:?}", ray_cast_config.directions[600]);
+    // println!("ray {:?}", ray_cast_config.directions[600]);
 
     (ray_cast_config, line_strips)
 }
