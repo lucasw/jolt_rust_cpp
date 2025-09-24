@@ -4,11 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.99"
 cxx = "1.0.183"
+# TODO(lucasw) keep glam in sync with jolt_rerun rerun version of glam
+glam = "0.30.7"
 noise = "0.9.0"
-# TODO(lucasw) update to 0.25
-rerun = "0.24.1"
 
 [build-dependencies]
 cmake = "0.1.54"

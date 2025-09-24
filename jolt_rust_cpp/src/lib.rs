@@ -1,5 +1,4 @@
 use noise::{NoiseFn, Perlin};
-use rerun::external::glam;
 
 // include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 const NUM: usize = 196;
@@ -121,7 +120,7 @@ pub fn make_terrain(
     ffi::CTerrain,
     Vec<[f64; 3]>,
     Vec<[u32; 3]>,
-    Vec<rerun::Color>,
+    Vec<(u8, u8, u8)>,
 ) {
     let x0 = 0.0;
     let y0 = 0.0;
@@ -145,7 +144,8 @@ pub fn make_terrain(
             let r = (((x - offset) / 4.0) as u32 % 255) as u8;
             let g = ((255.0 * ((z_norm + 1.0) / 2.0)) as u32 % 255) as u8;
             let b = (255.0 * ((z_norm + 1.0) / 2.0)) as u8;
-            colors.push(rerun::Color::from_rgb(r, g, b));
+            colors.push((r, g, b));
+            // colors.push(rerun::Color::from_rgb(r, g, b));
         }
     }
 

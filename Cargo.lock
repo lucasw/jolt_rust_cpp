@@ -5687,15 +5687,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "jolt_rust_cpp"
+name = "jolt_rerun"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "jolt_rust_cpp",
+ "noise",
+ "rerun",
+]
+
+[[package]]
+name = "jolt_rust_cpp"
+version = "0.1.0"
+dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
+ "glam 0.30.7",
  "noise",
- "rerun",
 ]
 
 [[package]]
