@@ -217,7 +217,7 @@ namespace jolt_rust_cpp {
       static inline float     sInitialRollAngle = 0;
       // TODO(lucasw) this roll angle is relative to the y-up orientation?
       static inline float     sMaxRollAngle = DegreesToRadians(30.0f);
-      static inline float     sMaxSteeringAngle = DegreesToRadians(30.0f);
+      static inline float     sMaxSteeringAngle = DegreesToRadians(45.0f);
       static inline int       sCollisionMode = 2;
       static inline bool      sFourWheelDrive = true;
       static inline bool      sAntiRollbar = true;
