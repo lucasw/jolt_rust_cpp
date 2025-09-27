@@ -1,0 +1,60 @@
+name: Build jolt_rust_cpp
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-suite:
+    strategy:
+      fail-fast: false
+      matrix:
+        # os: [windows-latest, ubuntu-latest]
+        os: [ubuntu-latest]
+        rust_version: [stable]
+        build_flags: ["", "--features double-precision", "--features object-layer-u32", "--all-features"]
+        # exclude:
+        #   - os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+    name: Tests - ${{ matrix.os }} ${{ matrix.rust_version }} ${{ matrix.build_flags }}
+
+    steps:
+
+      # checkout deletes the current directory, so checkout before curl into same dir
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: get vulkan sdk
+      run: |
+        pwd
+        # TODO(lucasw) get windows sdk if in windows
+        curl -o vulkan.tar.xz https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz
+        tar xf vulkan*.tar.xz
+        source 1.4.321.1/setup-env.sh
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust_version }}
+
+    # - uses: swatinem/rust-cache@v2
+
+    - name: Install rerun
+      run: |
+        pip3 install rerun-sdk==0.24.1
+        # cargo binstall rerun-cli
+        # cargo binstall --force rerun-cli@0.24.1
+
+    - name: Build debug
+      run: |
+        pwd
+        source 1.4.321.1/setup-env.sh
+        cargo build
+
+    - name: Build release
+      run: |
+        pwd
+        source 1.4.321.1/setup-env.sh
+        cargo build --release
