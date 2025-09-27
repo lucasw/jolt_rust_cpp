@@ -9,15 +9,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # os: [windows-latest, ubuntu-latest]
         os: [ubuntu-latest]
         rust_version: [stable]
-        build_flags: ["", "--features double-precision", "--features object-layer-u32", "--all-features"]
-        # exclude:
-        #   - os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
-    name: Tests - ${{ matrix.os }} ${{ matrix.rust_version }} ${{ matrix.build_flags }}
+    name: Tests - ${{ matrix.os }} ${{ matrix.rust_version }}
 
     steps:
 
