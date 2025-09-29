@@ -4,13 +4,7 @@ fn main() {
     // force rebuild if this file changes
     println!("cargo:rerun-if-changed=NULL");
 
-    // let dst = cmake::build("JoltPhysics/Build");
     let dst = cmake::Config::new("../JoltPhysics/Build")
-        // TODO(lucasw) still only works in debug mode
-        // in release get undefined reference to `JPH::AssertFailed'
-        // no matter which settings of JPH_ENABLE_ASSERTS used
-        // "USE_ASSERTS" -> -DUSE_ASERTS on command line -> USE_ASSERTS in cmake file
-        .define("USE_ASSERTS", "ON")
         .build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -59,14 +53,7 @@ fn main() {
 
     cxx_build::bridge("src/lib.rs")
         .file("src/misc.cpp")
-        .include("../JoltPhysics")
-        // these need to sync with defaults in JoltPhysics cmake
-        .define("JPH_DEBUG_RENDERER", Some("1"))
-        .define("JPH_OBJECT_STREAM", Some("1"))
-        .define("JPH_PROFILE_ENABLED", Some("1"))
-        // TODO(lucasw) there is an issue here with debug builds vs release builds,
-        // only debug builds are currently working
-        .define("JPH_ENABLE_ASSERTS", Some("1"))
+        .include(dst.join("include"))
         .std("c++20")
         .compile("vehicle_jolt");
 
