@@ -9,7 +9,9 @@ fn main() {
         println!("cargo:warning=Running build.rs in DEBUG mode");
         let mut config = cmake::Config::new("../JoltPhysics/Build");
         println!("cargo:warning=config {}", config.get_profile());
-        let dst = config.build();
+        let dst = config
+            .define("USE_ASSERTS", "ON")
+            .build();
 
         println!("cargo:rustc-link-search=native={}", dst.display());
 
@@ -17,7 +19,7 @@ fn main() {
             .file("src/misc.cpp")
             // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
             .define("JPH_DEBUG_RENDERER", Some("1"))
-            .define("JPH_ENABLE_ASSERTS", Some("1"))
+            .define("JPH_ENABLE_ASSERTS", None)
             .define("JPH_OBJECT_STREAM", Some("1"))
             .define("JPH_PROFILE_ENABLED", Some("1"))
             .include(dst.join("include"))
@@ -41,17 +43,14 @@ fn main() {
         // https://github.com/jrouwe/JoltPhysics/discussions/1332
         cxx_build::bridge("src/lib.rs")
             .file("src/misc.cpp")
-            .define("JPH_ENABLE_ASSERTS", None)
-            .define("JPH_DISABLE_CUSTOM_ALLOCATOR", None)
-            .define("JPH_TRACK_BROADPHASE_STATS", None)
-            .define("JPH_TRACK_NARROWPHASE_STATS", None)
-            .define("JPH_EXTERNAL_PROFILE", None)
-            .define("JPH_PROFILE_ENABLED", None)
-            .define("NDEBUG", Some("1"))
-            .define("_DEBUG", None)
-            /*
-            .define("DEBUG", None)
-            */
+            // .define("JPH_DISABLE_CUSTOM_ALLOCATOR", None)
+            // .define("JPH_TRACK_BROADPHASE_STATS", None)
+            // .define("JPH_TRACK_NARROWPHASE_STATS", None)
+            // .define("JPH_EXTERNAL_PROFILE", None)
+            // .define("JPH_PROFILE_ENABLED", None)
+            .define("NDEBUG", None)
+            // .define("_DEBUG", None)
+            // .define("DEBUG", None)
             .include(dst.join("include"))
             .std("c++20")
             .compile("vehicle_jolt");
