@@ -37,6 +37,7 @@ fn main() {
             // .define("USE_ASSERTS", "OFF")
             .define("GENERATE_DEBUG_SYMBOLS", "OFF")
             .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
+            .define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
             .build();
 
         println!("cargo:rustc-link-search=native={}", dst.display());
