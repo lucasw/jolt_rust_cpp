@@ -4,14 +4,61 @@ fn main() {
     // force rebuild if this file changes
     println!("cargo:rerun-if-changed=NULL");
 
-    let dst = cmake::Config::new("../JoltPhysics/Build")
-        // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
-        // off
-        // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
-        .define("USE_ASSERTS", "ON")
-        .build();
+    let profile = std::env::var("PROFILE").unwrap();
+    if profile == "debug" {
+        println!("cargo:warning=Running build.rs in DEBUG mode");
+        let mut config = cmake::Config::new("../JoltPhysics/Build");
+        println!("cargo:warning=config {}", config.get_profile());
+        let dst = config.build();
 
-    println!("cargo:rustc-link-search=native={}", dst.display());
+        println!("cargo:rustc-link-search=native={}", dst.display());
+
+        cxx_build::bridge("src/lib.rs")
+            .file("src/misc.cpp")
+            // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
+            .define("JPH_DEBUG_RENDERER", Some("1"))
+            .define("JPH_ENABLE_ASSERTS", Some("1"))
+            .define("JPH_OBJECT_STREAM", Some("1"))
+            .define("JPH_PROFILE_ENABLED", Some("1"))
+            .include(dst.join("include"))
+            .std("c++20")
+            .compile("vehicle_jolt");
+    } else if profile == "release" {
+        println!("cargo:warning=Running build.rs in RELEASE mode");
+        let mut config = cmake::Config::new("../JoltPhysics/Build");
+        println!("cargo:warning=config {}", config.get_profile());
+        let dst = config
+            // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
+            // off
+            // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
+            // .define("USE_ASSERTS", "OFF")
+            // .define("GENERATE_DEBUG_SYMBOLS", "OFF")
+            .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
+            .build();
+
+        println!("cargo:rustc-link-search=native={}", dst.display());
+
+        // https://github.com/jrouwe/JoltPhysics/discussions/1332
+        cxx_build::bridge("src/lib.rs")
+            .file("src/misc.cpp")
+            .define("JPH_ENABLE_ASSERTS", None)
+            .define("JPH_DISABLE_CUSTOM_ALLOCATOR", None)
+            .define("JPH_TRACK_BROADPHASE_STATS", None)
+            .define("JPH_TRACK_NARROWPHASE_STATS", None)
+            .define("JPH_EXTERNAL_PROFILE", None)
+            .define("JPH_PROFILE_ENABLED", None)
+            .define("NDEBUG", Some("1"))
+            .define("_DEBUG", None)
+            /*
+            .define("DEBUG", None)
+            */
+            .include(dst.join("include"))
+            .std("c++20")
+            .compile("vehicle_jolt");
+
+    } else {
+        println!("cargo:warning=Running build.rs with unknown profile: {}", profile);
+    }
 
     // TODO(lucasw) can't really make use of this with cxx bridge
     /*
@@ -54,17 +101,6 @@ fn main() {
     text += &format!("heights: [f32; {num_terrain2}],\n    }}");
     std::fs::write(&path, text).unwrap();
     */
-
-    cxx_build::bridge("src/lib.rs")
-        .file("src/misc.cpp")
-        .include(dst.join("include"))
-        // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
-        .define("JPH_DEBUG_RENDERER", Some("1"))
-        .define("JPH_ENABLE_ASSERTS", Some("1"))
-        .define("JPH_OBJECT_STREAM", Some("1"))
-        .define("JPH_PROFILE_ENABLED", Some("1"))
-        .std("c++20")
-        .compile("vehicle_jolt");
 
     println!("cargo:rerun-if-changed=src/misc.cpp");
     println!("cargo:rerun-if-changed=src/misc.h");
