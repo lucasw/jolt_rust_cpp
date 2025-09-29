@@ -48,10 +48,10 @@ jobs:
       run: |
         pwd
         source 1.4.321.1/setup-env.sh
-        cargo build --verbose
+        cargo build -vv
 
     - name: Build release
       run: |
         pwd
         source 1.4.321.1/setup-env.sh
-        cargo build --release --verbose
+        cargo build --release -vv
