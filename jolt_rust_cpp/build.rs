@@ -58,6 +58,11 @@ fn main() {
     cxx_build::bridge("src/lib.rs")
         .file("src/misc.cpp")
         .include(dst.join("include"))
+        // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
+        .define("JPH_DEBUG_RENDERER", Some("1"))
+        .define("JPH_ENABLE_ASSERTS", Some("1"))
+        .define("JPH_OBJECT_STREAM", Some("1"))
+        .define("JPH_PROFILE_ENABLED", Some("1"))
         .std("c++20")
         .compile("vehicle_jolt");
 
