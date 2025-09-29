@@ -33,8 +33,9 @@ fn main() {
             // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
             // off
             // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
+            // This is off by default for a release build
             // .define("USE_ASSERTS", "OFF")
-            // .define("GENERATE_DEBUG_SYMBOLS", "OFF")
+            .define("GENERATE_DEBUG_SYMBOLS", "OFF")
             .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
             .build();
 
