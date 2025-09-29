@@ -5,6 +5,10 @@ fn main() {
     println!("cargo:rerun-if-changed=NULL");
 
     let dst = cmake::Config::new("../JoltPhysics/Build")
+        // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
+        // off
+        // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
+        .define("USE_ASSERTS", "ON")
         .build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
