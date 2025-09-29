@@ -107,7 +107,11 @@ namespace jolt_rust_cpp {
 
     // Install trace and assert callbacks
     Trace = TraceImpl;
+
+    // TODO(lucasw) github action isn't processing the JPH_IF_ENABLE_ASERTS consistently with the define
+#ifdef JPH_ENABLE_ASSERTS
     JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+#endif
 
     // Create a factory, this class is responsible for creating instances of classes based on their name or hash and is mainly used for deserialization of saved data.
     // It is not directly used in this example but still required.
