@@ -37,6 +37,12 @@
 
 #include "jolt_rust_cpp/src/lib.rs.h"
 
+#ifndef JPH_DISABLE_CUSTOM_ALLOCATOR
+#pragma message "enabled custom allocator in misc.cpp"
+#else
+#pragma message "disabled custom allocator in misc.cpp"
+#endif
+
 // Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
 JPH_SUPPRESS_WARNINGS
 

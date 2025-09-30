@@ -35,15 +35,18 @@ fn main() {
         println!("cargo:warning=Running build.rs in RELEASE mode");
         println!("cargo:warning=config {}", config.get_profile());
         dst = config
+            .define("ENABLE_ALL_WARNINGS", "OFF")
             // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
             // off
             // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
             // This is off by default for a release build
             // .define("USE_ASSERTS", "OFF")
             .define("DISABLE_CUSTOM_ALLOCATOR", "OFF")
-            .define("GENERATE_DEBUG_SYMBOLS", "OFF")
-            .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
-            .define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
+            .define("INTERPROCEDURAL_OPTIMIZATION", "OFF")
+            .define("FLOATING_POINT_EXCEPTIONS_ENABLED", "OFF")
+            //.define("GENERATE_DEBUG_SYMBOLS", "OFF")
+            //.define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
+            //.define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
             .build();
 
         // https://github.com/jrouwe/JoltPhysics/discussions/1332
@@ -55,6 +58,7 @@ fn main() {
             // .define("JPH_TRACK_NARROWPHASE_STATS", None)
             // .define("JPH_EXTERNAL_PROFILE", None)
             // .define("JPH_PROFILE_ENABLED", None)
+            .define("JPH_OBJECT_STREAM", None)
             .define("NDEBUG", None) // get undefined symbol AssertFailed without this
             // .define("_DEBUG", None)
             // .define("DEBUG", None)
@@ -120,7 +124,6 @@ fn main() {
     // TODO(lucasw) this doesn't seem necessary, at least for debug builds
     // On macOS and Linux, we need to explicitly link against the C++ standard
     // library here to avoid getting missing symbol errors from Jolt/JoltC.
-    /*
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-flags=-l dylib=c++");
     }
@@ -128,5 +131,4 @@ fn main() {
     if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     }
-    */
 }
