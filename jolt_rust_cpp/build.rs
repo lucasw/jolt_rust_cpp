@@ -5,29 +5,33 @@ fn main() {
     println!("cargo:rerun-if-changed=NULL");
 
     let profile = std::env::var("PROFILE").unwrap();
+    let mut config = cmake::Config::new("../JoltPhysics/Build");
+    let mut bridge = cxx_build::bridge("src/lib.rs");
+    let cpp_name = "src/misc.cpp";
+    let compile_name = "vehicle_jolt";
+
+    println!(
+        "cargo:warning=target {}",
+        std::env::var("CARGO_CFG_TARGET_OS").unwrap()
+    );
+
     if profile == "debug" {
         println!("cargo:warning=Running build.rs in DEBUG mode");
-        let mut config = cmake::Config::new("../JoltPhysics/Build");
         println!("cargo:warning=config {}", config.get_profile());
-        let dst = config
-            .define("USE_ASSERTS", "ON")
-            .build();
+        let dst = config.define("USE_ASSERTS", "ON").build();
 
-        println!("cargo:rustc-link-search=native={}", dst.display());
-
-        cxx_build::bridge("src/lib.rs")
-            .file("src/misc.cpp")
-            // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
+        // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
+        bridge
+            .file(cpp_name)
             .define("JPH_DEBUG_RENDERER", Some("1"))
             .define("JPH_ENABLE_ASSERTS", None)
             .define("JPH_OBJECT_STREAM", Some("1"))
             .define("JPH_PROFILE_ENABLED", Some("1"))
             .include(dst.join("include"))
             .std("c++20")
-            .compile("vehicle_jolt");
+            .compile(compile_name);
     } else if profile == "release" {
         println!("cargo:warning=Running build.rs in RELEASE mode");
-        let mut config = cmake::Config::new("../JoltPhysics/Build");
         println!("cargo:warning=config {}", config.get_profile());
         let dst = config
             // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
@@ -35,30 +39,32 @@ fn main() {
             // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
             // This is off by default for a release build
             // .define("USE_ASSERTS", "OFF")
+            .define("DISABLE_CUSTOM_ALLOCATOR", "OFF")
             .define("GENERATE_DEBUG_SYMBOLS", "OFF")
             .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
             .define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
             .build();
 
-        println!("cargo:rustc-link-search=native={}", dst.display());
-
         // https://github.com/jrouwe/JoltPhysics/discussions/1332
-        cxx_build::bridge("src/lib.rs")
-            .file("src/misc.cpp")
+        // https://github.com/lucasw/jolt_rust_cpp/issues/1
+        bridge
+            .file(cpp_name)
             // .define("JPH_DISABLE_CUSTOM_ALLOCATOR", None)
             // .define("JPH_TRACK_BROADPHASE_STATS", None)
             // .define("JPH_TRACK_NARROWPHASE_STATS", None)
             // .define("JPH_EXTERNAL_PROFILE", None)
             // .define("JPH_PROFILE_ENABLED", None)
-            .define("NDEBUG", None)
+            .define("NDEBUG", None) // get undefined symbol AssertFailed without this
             // .define("_DEBUG", None)
             // .define("DEBUG", None)
             .include(dst.join("include"))
             .std("c++20")
-            .compile("vehicle_jolt");
-
+            .compile(compile_name);
     } else {
-        println!("cargo:warning=Running build.rs with unknown profile: {}", profile);
+        println!(
+            "cargo:warning=Running build.rs with unknown profile: {}",
+            profile
+        );
     }
 
     // TODO(lucasw) can't really make use of this with cxx bridge
