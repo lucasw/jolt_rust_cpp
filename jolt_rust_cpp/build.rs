@@ -42,11 +42,13 @@ fn main() {
             // This is off by default for a release build
             // .define("USE_ASSERTS", "OFF")
             .define("DISABLE_CUSTOM_ALLOCATOR", "OFF")
+            // interprocedural optimization and floating point exceptions off was key to making release
+            // build work
             .define("INTERPROCEDURAL_OPTIMIZATION", "OFF")
             .define("FLOATING_POINT_EXCEPTIONS_ENABLED", "OFF")
             //.define("GENERATE_DEBUG_SYMBOLS", "OFF")
-            //.define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
-            //.define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
+            .define("PROFILER_IN_DEBUG_AND_RELEASE", "OFF")
+            .define("DEBUG_RENDERER_IN_DEBUG_AND_RELEASE", "OFF")
             .build();
 
         // https://github.com/jrouwe/JoltPhysics/discussions/1332
@@ -124,6 +126,7 @@ fn main() {
     // TODO(lucasw) this doesn't seem necessary, at least for debug builds
     // On macOS and Linux, we need to explicitly link against the C++ standard
     // library here to avoid getting missing symbol errors from Jolt/JoltC.
+    /*
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-flags=-l dylib=c++");
     }
@@ -131,4 +134,5 @@ fn main() {
     if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     }
+    */
 }
