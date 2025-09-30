@@ -15,10 +15,11 @@ fn main() {
         std::env::var("CARGO_CFG_TARGET_OS").unwrap()
     );
 
+    let dst;
     if profile == "debug" {
         println!("cargo:warning=Running build.rs in DEBUG mode");
         println!("cargo:warning=config {}", config.get_profile());
-        let dst = config.define("USE_ASSERTS", "ON").build();
+        dst = config.define("USE_ASSERTS", "ON").build();
 
         // TODO(lucasw) any way to sync these with whatever Jolt.cmake used?
         bridge
@@ -33,7 +34,7 @@ fn main() {
     } else if profile == "release" {
         println!("cargo:warning=Running build.rs in RELEASE mode");
         println!("cargo:warning=config {}", config.get_profile());
-        let dst = config
+        dst = config
             // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
             // off
             // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
@@ -65,6 +66,7 @@ fn main() {
             "cargo:warning=Running build.rs with unknown profile: {}",
             profile
         );
+        return;
     }
 
     // TODO(lucasw) can't really make use of this with cxx bridge
@@ -112,12 +114,13 @@ fn main() {
     println!("cargo:rerun-if-changed=src/misc.cpp");
     println!("cargo:rerun-if-changed=src/misc.h");
 
-    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    println!("cargo:rustc-link-search=native={}/lib", out_dir.display());
-    println!("cargo:rustc-link-lib=Jolt");
+    println!("cargo:rustc-link-search=native={}/lib", dst.display());
+    println!("cargo:rustc-link-lib=static=Jolt");
 
+    // TODO(lucasw) this doesn't seem necessary, at least for debug builds
     // On macOS and Linux, we need to explicitly link against the C++ standard
     // library here to avoid getting missing symbol errors from Jolt/JoltC.
+    /*
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-flags=-l dylib=c++");
     }
@@ -125,4 +128,5 @@ fn main() {
     if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     }
+    */
 }
