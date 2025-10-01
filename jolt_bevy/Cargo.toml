@@ -11,7 +11,7 @@ categories.workspace = true
 
 [dependencies]
 anyhow = "1.0.100"
-bevy = { version = "0.16.1", features = ["dynamic_linking"] }
+bevy = { version = "0.17", features = ["dynamic_linking"] }
 crossbeam-channel = "0.5.15"
 cxx = "1.0.185"
 glam = "0.30.7"

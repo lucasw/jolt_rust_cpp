@@ -6,13 +6,14 @@ use jolt_rust_cpp::*;
 use noise::{NoiseFn, Perlin};
 
 use bevy::{
+    asset::RenderAssetUsages,
     color::palettes::css,
+    mesh::{Indices, VertexAttributeValues},
     prelude::*,
     render::{
-        Render, RenderSet,
-        camera::RenderTarget,
-        mesh::{Indices, VertexAttributeValues},
-        render_asset::RenderAssetUsages,
+        Render,
+        RenderSet,
+        // bevy_asset::RenderAssetUsages,
         render_resource::CommandEncoder,
         render_resource::PrimitiveTopology,
         render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
@@ -599,8 +600,7 @@ fn main() -> Result<(), anyhow::Error> {
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     present_mode: PresentMode::AutoNoVsync,
-                    resolution: WindowResolution::new(1280.0, 720.0)
-                        .with_scale_factor_override(1.0),
+                    resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
                     ..default()
                 }),
                 ..default()
