@@ -39,8 +39,7 @@ fn main() {
             // TODO(lucasw) build release doesn't work without this, need to figure out how to turn it
             // off
             // "USE_ASSERTS" -> -DUSE_ASSERTS on command line -> USE_ASSERTS in cmake file
-            // This is off by default for a release build
-            // .define("USE_ASSERTS", "OFF")
+            .define("USE_ASSERTS", "OFF")
             .define("DISABLE_CUSTOM_ALLOCATOR", "OFF")
             // interprocedural optimization and floating point exceptions off was key to making release
             // build work
