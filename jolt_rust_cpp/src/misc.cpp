@@ -483,7 +483,7 @@ namespace jolt_rust_cpp {
     Factory::sInstance = nullptr;
   }
 
-  std::array<CTf, 4> SimSystem::pre_physics_update(jolt_rust_cpp::CControls controls)
+  std::array<Wheel, 4> SimSystem::pre_physics_update(jolt_rust_cpp::CControls controls)
   {
     auto& body_interface = physics_system->GetBodyInterface();
     // On user input, assure that the car is active
@@ -534,17 +534,22 @@ namespace jolt_rust_cpp {
 
     // TODO(lucasw) return these transforms to caller so they can be visualized
     // Draw our wheels (this needs to be done in the pre update since we draw the bodies too in the state before the step)
-    std::array<CTf, 4> wheel_tfs;
+    std::array<Wheel, 4> wheel_tfs;
     for (uint w = 0; w < 4; ++w) {
       RMat44 wheel_transform = mVehicleConstraint->GetWheelWorldTransform(w, Vec3::sAxisY(), Vec3::sAxisX()); // The cylinder we draw is aligned with Y so we specify that as rotational axis
       CTf tf;
       tf.pos = to_cvec3(wheel_transform.GetTranslation());
       auto rot = wheel_transform.GetQuaternion();
       tf.quat = to_cquat(rot);
-      wheel_tfs[w] = tf;
+      // TODO(lucasw) get per wheel angular & linear velocity in world
+      // body_interface.GetLinearAndAngularVelocity(car_id, linear_vel, angular_vel);
+      wheel_tfs[w].tf = tf;
       // cout << w << " " << tf << endl;
       // TODO(lucasw) can the debug renderer work within rust framework?
-      // const WheelSettings *settings = mVehicleConstraint->GetWheels()[w]->GetSettings();
+      const auto wheel = mVehicleConstraint->GetWheels()[w];
+      wheel_tfs[w].angular_velocity = wheel->GetAngularVelocity();
+      wheel_tfs[w].rotation_angle = wheel->GetRotationAngle();
+      wheel_tfs[w].steer_angle = wheel->GetSteerAngle();
       // mDebugRenderer->DrawCylinder(wheel_transform, 0.5f * settings->mWidth, settings->mRadius, Color::sGreen);
     }
 
@@ -573,8 +578,10 @@ namespace jolt_rust_cpp {
     tfs.body.pos = to_cvec3(position);
     auto jolt_rot = body_interface.GetRotation(car_id);
     tfs.body.quat = to_cquat(jolt_rot);
+    tfs.body.linear_vel = to_cvec3(linear_vel);
+    tfs.body.angular_vel = to_cvec3(angular_vel);
 
-    // TODO(lucasw) fix order)
+    // TODO(lucasw) make enum for which is which
     tfs.wheel_fl = wheel_tfs[0];
     tfs.wheel_fr = wheel_tfs[1];
     tfs.wheel_bl = wheel_tfs[2];

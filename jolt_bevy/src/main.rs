@@ -563,10 +563,10 @@ fn vehicle_viz_update(
         vehicle_transform.rotation = cquat_to_bevy(&car_tfs.body.quat);
 
         let wheels_ctf = [
-            car_tfs.wheel_fl,
-            car_tfs.wheel_fr,
-            car_tfs.wheel_bl,
-            car_tfs.wheel_br,
+            car_tfs.wheel_fl.tf,
+            car_tfs.wheel_fr.tf,
+            car_tfs.wheel_bl.tf,
+            car_tfs.wheel_br.tf,
         ];
         for (wheel_ctf, mut wheel) in std::iter::zip(wheels_ctf.iter(), &mut wheel_transforms) {
             wheel.translation = cvec3_to_bevy(&wheel_ctf.pos);

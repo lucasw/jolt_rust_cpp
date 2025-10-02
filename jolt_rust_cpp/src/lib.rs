@@ -26,6 +26,16 @@ pub mod ffi {
     struct CTf {
         pos: CVec3,
         quat: CQuat,
+        linear_vel: CVec3,
+        angular_vel: CVec3,
+    }
+
+    #[derive(Clone, Debug)]
+    struct Wheel {
+        tf: CTf,
+        angular_velocity: f32,
+        rotation_angle: f32,
+        steer_angle: f32,
     }
 
     // TODO(lucasw) store the car chassis and wheel dimensions in this also, or in a separate
@@ -33,10 +43,10 @@ pub mod ffi {
     #[derive(Clone)]
     struct CarTfs {
         body: CTf,
-        wheel_fl: CTf,
-        wheel_fr: CTf,
-        wheel_bl: CTf,
-        wheel_br: CTf,
+        wheel_fl: Wheel,
+        wheel_fr: Wheel,
+        wheel_bl: Wheel,
+        wheel_br: Wheel,
     }
 
     #[derive(Clone)]

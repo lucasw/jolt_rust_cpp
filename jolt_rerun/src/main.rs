@@ -163,22 +163,38 @@ fn main() -> Result<(), anyhow::Error> {
         let half_wheel_width = 0.15;
         let wheel_radius = 0.3;
         let mut ind = 0;
-        for wheel_tf in [
+        for wheel in [
             car_tfs.wheel_fl,
             car_tfs.wheel_fr,
             car_tfs.wheel_bl,
             car_tfs.wheel_br,
         ] {
-            let rerun_quat = cylinder_cquat_to_rerun(wheel_tf.quat);
+            let rerun_quat = cylinder_cquat_to_rerun(wheel.tf.quat);
             rec.log(
                 format!("world/wheel{ind}"),
                 &rerun::Cylinders3D::from_lengths_and_radii(
                     [half_wheel_width * 2.0],
                     [wheel_radius],
                 )
-                .with_centers([cvec3_to_glam(&wheel_tf.pos)])
+                .with_centers([cvec3_to_glam(&wheel.tf.pos)])
                 .with_quaternions([rerun_quat]),
             )?;
+
+            rec.log(
+                format!("angular_velocity/wheel{ind}"),
+                &rerun::Scalars::single(wheel.angular_velocity as f64),
+            )?;
+
+            rec.log(
+                format!("rotation_angle/wheel{ind}"),
+                &rerun::Scalars::single(wheel.rotation_angle as f64),
+            )?;
+
+            rec.log(
+                format!("steer_angle/wheel{ind}"),
+                &rerun::Scalars::single(wheel.steer_angle as f64),
+            )?;
+
             ind += 1;
         }
     }
