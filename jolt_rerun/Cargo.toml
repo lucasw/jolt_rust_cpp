@@ -14,4 +14,4 @@ anyhow = "1.0.100"
 jolt_rust_cpp = { version = "0.1.0", path = "../jolt_rust_cpp" }
 noise = "0.9.0"
 # TODO(lucasw) update to 0.25
-rerun = "0.24.1"
+rerun = "0.26"
