@@ -1,11 +1,15 @@
 use jolt_rust_cpp::*;
 use noise::{NoiseFn, Perlin};
 use rerun::external::glam;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{thread, time};
 
 fn main() -> Result<(), anyhow::Error> {
     println!("jolt_rust_cpp");
 
-    let rec = rerun::RecordingStreamBuilder::new("jolt_rust_cpp").spawn()?;
+    let rec = rerun::RecordingStreamBuilder::new("jolt_rust_cpp")
+        .recording_id("test")
+        .spawn()?;
 
     let (ray_cast_config, ray_cast_line_strips) = jolt_rust_cpp::make_ray_casts();
 
@@ -21,6 +25,22 @@ fn main() -> Result<(), anyhow::Error> {
         x: 2.0,
         y: 0.9,
         z: 0.2,
+    };
+
+    let t_start = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("SystemTime since UNIX_EPOCH!") // Handle potential error if system time is before epoch
+        .as_secs_f64();
+
+    let vehicle_position = {
+        // use milliseconds as seed
+        let seed = ((t_start - t_start.floor()) * 1000.0) as u32;
+        let perlin = Perlin::new(seed);
+        ffi::CVec3 {
+            x: (2.0 + perlin.get([10.0])) as f32,
+            y: (0.9 + perlin.get([100.0])) as f32,
+            z: (4.0 + perlin.get([1000.0])) as f32,
+        }
     };
 
     let cell_size = 3.0;
@@ -42,7 +62,8 @@ fn main() -> Result<(), anyhow::Error> {
         .with_triangle_indices(triangles),
     )?;
 
-    let mut sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), terrain);
+    let mut sim_system =
+        ffi::new_sim_system(8000, vehicle_position, vehicle_half_size.clone(), terrain);
     /*
     // TODO(lucasw) use quat in SimSystem
     let floor_quat = (0.0, 0.0, 0.0, 1.0);
@@ -96,13 +117,17 @@ fn main() -> Result<(), anyhow::Error> {
 
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..4100 {
-        let time_s = step as f64 * delta_time as f64;
-        rec.set_timestamp_secs_since_epoch("view", time_s);
+    for step in 0..240 {
+        thread::sleep(time::Duration::from_micros((delta_time * 1e6) as u64));
+        let t_now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime since UNIX_EPOCH!")
+            .as_secs_f64();
+        rec.set_timestamp_secs_since_epoch("view", t_now);
 
         let control = ffi::CControls {
             forward: 0.052,
-            right: (perlin.get([time_s / 10.0]) / 2.0) as f32,
+            right: (perlin.get([t_now / 10.0]) / 2.0) as f32,
         };
         let car_tfs = sim_system.as_mut().unwrap().update(control);
 

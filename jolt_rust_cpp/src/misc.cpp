@@ -106,7 +106,7 @@ namespace jolt_rust_cpp {
 // max_num_bodies is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
 
-  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 vehicle_half_size, CTerrain terrain) {
+  SimSystem::SimSystem(uint32_t max_num_bodies, CVec3 vehicle_position, CVec3 vehicle_half_size, CTerrain terrain) {
     // Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
     // This needs to be done before any other Jolt function is called.
     RegisterDefaultAllocator();
@@ -225,9 +225,10 @@ namespace jolt_rust_cpp {
       mTesters[1] = new VehicleCollisionTesterCastSphere(Layers::MOVING, 0.5f * wheel_width);
       mTesters[2] = new VehicleCollisionTesterCastCylinder(Layers::MOVING);
 
+      Vec3 position = Vec3(vehicle_position.x, vehicle_position.y, vehicle_position.z);
+
       // TODO(lucasw) rotate the car so z is vertical axis, here it spawns sideways
       // Create vehicle body
-      RVec3 position(0, 0, 8);
       RefConst<Shape> car_shape = OffsetCenterOfMassShapeSettings(
           // Vec3(0, 0, -half_vehicle_height),
           Vec3(0, 0, 0),
@@ -649,9 +650,10 @@ namespace jolt_rust_cpp {
   }
 
   std::unique_ptr<SimSystem> new_sim_system(uint32_t max_num_bodies,
+      jolt_rust_cpp::CVec3 vehicle_position,
       jolt_rust_cpp::CVec3 vehicle_half_size,
       jolt_rust_cpp::CTerrain terrain) {
-    return std::make_unique<SimSystem>(max_num_bodies, vehicle_half_size, terrain);
+    return std::make_unique<SimSystem>(max_num_bodies, vehicle_position, vehicle_half_size, terrain);
   }
 
 } // namespace jolt_rust_cpp

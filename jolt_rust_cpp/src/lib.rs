@@ -82,6 +82,7 @@ pub mod ffi {
         type SimSystem;
         fn new_sim_system(
             max_num_bodies: u32,
+            vehicle_position: CVec3,
             vehicle_half_size: CVec3,
             terrain: CTerrain,
         ) -> UniquePtr<SimSystem>;
