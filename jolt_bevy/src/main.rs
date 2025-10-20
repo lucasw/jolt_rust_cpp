@@ -115,7 +115,18 @@ fn sim_setup(world: &mut World) {
         y: config.vehicle_half_size.y,
         z: config.vehicle_half_size.z,
     };
-    let sim_system = ffi::new_sim_system(8000, vehicle_half_size.clone(), config.terrain.clone());
+    let vehicle_position = ffi::CVec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 3.0,
+    };
+
+    let sim_system = ffi::new_sim_system(
+        8000,
+        vehicle_position,
+        vehicle_half_size.clone(),
+        config.terrain.clone(),
+    );
     world.insert_non_send_resource(sim_system);
 
     let (sender, receiver) = crossbeam_channel::unbounded();
