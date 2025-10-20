@@ -117,7 +117,8 @@ fn main() -> Result<(), anyhow::Error> {
 
     let delta_time = 1.0 / 60.0;
 
-    for step in 0..240 {
+    // for step in 0..240 {
+    loop {
         thread::sleep(time::Duration::from_micros((delta_time * 1e6) as u64));
         let t_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
